@@ -1,0 +1,289 @@
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { api } from '../api';
+import { useLang } from '../i18n';
+import type { Options } from '../types';
+
+export const PROGRAM = 'ENTREPRENEURSHIP DEVELOPMENT PROGRAM';
+export const ORGANISATION = 'Sumago Infotech Pvt. Ltd.';
+
+/* The official Sumago Infotech logo on a white tile (public/sumago-logo.svg, from sumagoinfotech.com). */
+export function BrandMark() {
+  return (
+    <span className="brand-mark" aria-hidden="true">
+      <img src="/sumago-logo.svg" alt="" width="34" height="34" />
+    </span>
+  );
+}
+
+export function Header({ right }: { right?: ReactNode }) {
+  return (
+    <header className="topbar">
+      <div className="topbar-in">
+        <BrandMark />
+        <div className="brand">
+          <h1>{PROGRAM}</h1>
+          <p>by {ORGANISATION}</p>
+        </div>
+        {right ? <div className="topbar-user">{right}</div> : null}
+      </div>
+    </header>
+  );
+}
+
+export function Field({
+  id,
+  label,
+  error,
+  hint,
+  required = true,
+  wide,
+  children,
+}: {
+  id: string;
+  label: string;
+  error?: string;
+  hint?: ReactNode;
+  required?: boolean;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  /* The control (the one child) is described by its error, else its hint, and says whether it is required. */
+  const describedBy = error ? `${id}-err` : hint ? `${id}-hint` : undefined;
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+        ...(describedBy ? { 'aria-describedby': describedBy } : {}),
+        'aria-required': required || undefined,
+      })
+    : children;
+  return (
+    <div className={wide ? 'field wide' : 'field'}>
+      <label htmlFor={id}>
+        {label} {required ? <span className="req">*</span> : null}
+      </label>
+      {control}
+      {error ? (
+        <span className="err" role="alert" id={`${id}-err`}>
+          {error}
+        </span>
+      ) : hint ? (
+        <span className="hint" id={`${id}-hint`}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/* Password with an eye button that shows / hides it (as the AMRUT admin panel's sign-in). */
+export function PasswordInput(props: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  invalid?: boolean;
+  autoComplete: string;
+  'aria-describedby'?: string;
+  'aria-required'?: boolean;
+}) {
+  const { T } = useLang();
+  const [show, setShow] = useState(false);
+  /* The label says what the button does next; no aria-pressed as well, which would contradict it. */
+  const label = show ? T('पासवर्ड लपवा', 'Hide password') : T('पासवर्ड दाखवा', 'Show password');
+  return (
+    <div className="pw-wrap">
+      <input
+        id={props.id}
+        className="inp"
+        type={show ? 'text' : 'password'}
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value)}
+        aria-invalid={props.invalid || undefined}
+        aria-describedby={props['aria-describedby']}
+        aria-required={props['aria-required']}
+        autoComplete={props.autoComplete}
+        maxLength={72}
+      />
+      <button type="button" className="pw-toggle" onClick={() => setShow(!show)} aria-label={label} title={label}>
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+          <circle cx="12" cy="12" r="3" />
+          {show ? <line x1="3" y1="3" x2="21" y2="21" /> : null}
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+export function Notice({ tone, children }: { tone: 'info' | 'warn' | 'ok' | 'error'; children: ReactNode }) {
+  return (
+    /* Errors interrupt (alert); confirmations are announced politely (status). */
+    <div className={`notice ${tone}`} role={tone === 'error' ? 'alert' : tone === 'ok' ? 'status' : undefined}>
+      {children}
+    </div>
+  );
+}
+
+/* Dropdown values and document types (active masters only), fetched once per page load. */
+let optionsCache: Promise<Options> | null = null;
+export function loadOptions(): Promise<Options> {
+  optionsCache ??= api<Options>('/options')
+    .then((r) => r.data)
+    .catch((e) => {
+      optionsCache = null;
+      throw e;
+    });
+  return optionsCache;
+}
+export function useOptions(): Options | null {
+  const [options, setOptions] = useState<Options | null>(null);
+  useEffect(() => {
+    let live = true;
+    loadOptions()
+      .then((o) => live && setOptions(o))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  return options;
+}
+
+/* Shown at the foot of every portal page: the documents to keep ready (the active document types). */
+export function DocumentsReady() {
+  const options = useOptions();
+  if (!options?.document_types.length) return null;
+  return (
+    <aside className="docs-ready" aria-labelledby="docs-ready-title">
+      <h4 id="docs-ready-title">Keep these documents ready</h4>
+      <ol>
+        {options.document_types.map((d) => (
+          <li key={d.code}>
+            {d.name}
+            {d.is_mandatory ? <span className="req"> *</span> : <span className="muted"> (if applicable)</span>}
+          </li>
+        ))}
+      </ol>
+      <p className="hint mt8">* Mandatory. Scanned copies in PDF, JPG, JPEG or PNG format, each up to 5 MB.</p>
+    </aside>
+  );
+}
+
+export function Footer() {
+  return (
+    <footer className="site-foot">
+      © {new Date().getFullYear()} {PROGRAM} · {ORGANISATION}
+    </footer>
+  );
+}
+
+/* Open dialogs, newest last: Escape and the focus trap act on the top one only (a confirmation can sit on a preview). */
+const openDialogs: symbol[] = [];
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/*
+ * A dialog: focus moves into it when it opens (to the element marked data-autofocus, else the dialog) and back where it
+ * was when it closes; Tab stays inside it. `alert` = a yes/no question (role alertdialog); `wide` = a large preview.
+ */
+export function Modal({
+  title,
+  children,
+  onClose,
+  alert,
+  wide,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  alert?: boolean;
+  wide?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const me = Symbol('dialog');
+    openDialogs.push(me);
+    const before = document.activeElement as HTMLElement | null;
+    const box = ref.current;
+    (box?.querySelector<HTMLElement>('[data-autofocus]') ?? box)?.focus();
+    const isTop = () => openDialogs[openDialogs.length - 1] === me;
+    const onKey = (e: KeyboardEvent) => {
+      if (!isTop() || !box) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close.current();
+      } else if (e.key === 'Tab') {
+        const items = [...box.querySelectorAll<HTMLElement>(FOCUSABLE)];
+        /* While a request runs the buttons are disabled and focus may have dropped to the page: bring it back in. */
+        if (!items.length || !box.contains(document.activeElement)) {
+          e.preventDefault();
+          (items[0] ?? box).focus();
+          return;
+        }
+        const first = items[0]!;
+        const last = items[items.length - 1]!;
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === box)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    /* Focus never stays on the page behind the top dialog (e.g. a disabled button losing focus, or a script). */
+    const onFocusIn = (e: FocusEvent) => {
+      if (isTop() && box && e.target instanceof Node && !box.contains(e.target)) box.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('focusin', onFocusIn);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('focusin', onFocusIn);
+      openDialogs.splice(openDialogs.indexOf(me), 1);
+      /* Back to where the user was, if that is still on the page; else the next dialog down, if any. */
+      if (before && document.contains(before)) before.focus();
+    };
+  }, []);
+  return (
+    <div className="backdrop" onClick={() => close.current()}>
+      <div
+        ref={ref}
+        className={wide ? 'modal wide' : 'modal'}
+        role={alert ? 'alertdialog' : 'dialog'}
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id={titleId}>{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export const fmtDate = (iso: string | null | undefined, withTime = true) =>
+  iso
+    ? new Date(iso).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+      })
+    : '—';
+
+export const ddmmyyyy = (iso: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso || '—';
+};
