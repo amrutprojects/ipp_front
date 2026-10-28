@@ -301,7 +301,7 @@ export default function ApplicantDetailPage() {
                   <td className="nowrap">{doc.file ? fmtDate(doc.file.uploaded_at) : '—'}</td>
                   <td className="doc-actions-cell">
                     {doc.file ? (
-                      <div className="doc-actions">
+                      <div className="file-actions">
                         <button
                           type="button"
                           className="btn ghost sm"

@@ -958,9 +958,14 @@ function DocumentField(props: {
           if (!uploading) props.onUpload(t.code, e.dataTransfer.files?.[0]);
         }}
       >
-        <span className="dz-file" id={`${id}-file`}>
+        <span className="dz-file" id={`${id}-file`} title={draft?.original_name}>
           {uploading ? 'Uploading…' : (draft?.original_name ?? 'No file chosen')}
         </span>
+        {draft && !uploading ? (
+          <span className="dz-meta">
+            <span aria-hidden="true">✓</span> Uploaded · {kb(draft.size_bytes)}
+          </span>
+        ) : null}
         <span className="dz-prompt" id={`${id}-prompt`}>
           Click or drag file
         </span>
@@ -987,10 +992,7 @@ function DocumentField(props: {
         </div>
       ) : null}
       {draft ? (
-        <div className="row doc-actions">
-          <span className="muted">
-            Uploaded: {draft.original_name} ({kb(draft.size_bytes)})
-          </span>
+        <div className="doc-file-actions">
           <button
             type="button"
             className="btn ghost sm"

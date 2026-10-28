@@ -1364,12 +1364,12 @@ fieldset.radios legend {
   white-space: nowrap;
   width: 1%;
 }
-.doc-actions {
+.file-actions {
   display: inline-flex;
   gap: 8px;
   flex-wrap: nowrap;
 }
-.doc-actions .btn {
+.file-actions .btn {
   min-width: 104px;
   gap: 6px;
 }
@@ -1400,10 +1400,10 @@ fieldset.radios legend {
     text-align: left;
     padding-top: 8px;
   }
-  .docs-tbl .doc-actions {
+  .docs-tbl .file-actions {
     display: flex;
   }
-  .docs-tbl .doc-actions .btn {
+  .docs-tbl .file-actions .btn {
     flex: 1;
   }
 }
@@ -1487,10 +1487,20 @@ a.btn {
   color: var(--muted);
   font-size: 12px;
 }
-.doc-actions {
-  gap: 6px;
-}
-.doc-actions .muted {
+/* An uploaded document: size and a tick in the box, then View / Replace / Remove as one even row. */
+.dz-meta {
+  color: var(--green);
   font-size: 12.5px;
-  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.doc-file-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.doc-file-actions .btn {
+  width: 100%;
+  min-width: 0;
+  padding-left: 6px;
+  padding-right: 6px;
 }
