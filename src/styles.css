@@ -1494,20 +1494,3 @@ a.btn {
   font-size: 12.5px;
   overflow-wrap: anywhere;
 }
-.downloads {
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
-}
-.downloads h3 {
-  margin: 0 0 8px;
-}
-.download-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  align-items: baseline;
-}
-.download-row a {
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}

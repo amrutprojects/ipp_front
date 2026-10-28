@@ -27,8 +27,6 @@ const STATUS_LABEL: Record<string, string> = {
   RECEIVED: 'Received',
 };
 const kb = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
-/* The self-declaration form the student downloads, fills in and uploads (served from public/). */
-export const SELF_DECLARATION_HREF = '/Self-Declaration_Form.pdf';
 
 /* The documents of step 3 are exactly the server's list, in its order; a document is required when it is mandatory. */
 export const docRequired = (t: DocumentType) => t.is_mandatory;
@@ -1047,15 +1045,6 @@ function DocumentsStep(props: {
           />
         ))}
       </div>
-      <section className="downloads mt16" aria-labelledby="downloads-title">
-        <h3 id="downloads-title">Download documents</h3>
-        <div className="download-row">
-          <span>Self-Declaration Form</span>
-          <a href={SELF_DECLARATION_HREF} target="_blank" rel="noopener noreferrer" download>
-            Self-Declaration_Form.pdf
-          </a>
-        </div>
-      </section>
       <label className="row mt16" style={{ alignItems: 'flex-start', flexWrap: 'nowrap' }}>
         <input
           type="checkbox"

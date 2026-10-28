@@ -686,15 +686,12 @@ describe('Step 3: Upload Documents', () => {
     expect(localStorage.getItem('edp.pending.a1')).toBeNull();
   });
 
-  it('offers the Self-Declaration Form for download', async () => {
+  it('offers no Self-Declaration Form download', async () => {
     mockApi(step3([]), { options: withDocs });
     await renderFresh();
-    const block = (await screen.findByRole('heading', { name: 'Download documents' })).closest('section')!;
-    expect(within(block).getByText('Self-Declaration Form')).toBeInTheDocument();
-    const link = within(block).getByRole('link', { name: 'Self-Declaration_Form.pdf' });
-    expect(link).toHaveAttribute('href', '/Self-Declaration_Form.pdf');
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('download');
+    await screen.findByRole('heading', { name: 'Upload Documents' });
+    expect(screen.queryByRole('heading', { name: 'Download documents' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Self-Declaration/)).not.toBeInTheDocument();
   });
 
   it('uploads a file dropped on the file area, under the document code', async () => {
