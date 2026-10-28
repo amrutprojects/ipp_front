@@ -34,7 +34,10 @@ const OPTIONS = {
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
+/* These tests are about the create-account form: the caste eligibility step before it is confirmed already. */
+beforeEach(() => sessionStorage.setItem('edp.casteConfirmed', '1'));
 afterEach(() => {
+  sessionStorage.clear();
   vi.restoreAllMocks();
   forgetSignupPassword();
   localStorage.removeItem('edp.token');

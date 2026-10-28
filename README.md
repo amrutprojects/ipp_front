@@ -10,11 +10,11 @@ Student registration portal of the EDP by Sumago Infotech Pvt. Ltd., plus its tr
 | `/login` | Student | Email + password, and **Forgot password?** |
 | `/forgot-password` | Student | Emails a link to set a new password (valid 30 minutes, usable once) to a registered email ID; any other gets "This email ID is not registered. Kindly check your email ID." |
 | `/reset-password?token=…` | Student | The emailed link: new password ×2, then back to the login. Every other session of the account is signed out. |
-| `/application` | Student | Step 1 of 3 – Basic Details, Step 2 of 3 – Main Form, Step 3 of 3 – Upload Documents. Saved as typed, so the student resumes where they stopped. After submission (final: no edit or resubmission): the record as it is now in the student register, admin corrections included. |
-| `/manage/login`, `/manage` | EDP team | Tracking panel: every account with its stage (OTP pending, verified, step 1, step 2, submitted), with follow-ups (status + note) per student. |
+| `/application` | Student | Step 1 of 3 – Basic Details, Step 2 of 3 – Main Form, Step 3 of 3 – Upload Documents. Saved as typed, so the student resumes where they stopped. After submission (final: no edit or resubmission): the submitted registration, read-only. |
+| `/manage/login`, `/manage` | EDP team | Tracking panel: every account with its stage (OTP pending, verified, step 1, step 2, submitted), with follow-ups (status + note) per student; `/manage/applicants/:id` shows one student's full form and documents. |
 
-A submitted form becomes a registration in the Amrut admin panel (Student Registrations), created through the same
-validation as the admin form. Dropdowns list only active master values. After submitting, the student sees whom to
+A submitted form stays in the EDP system (registration ID `EDP-000001`, …); the EDP team sees it in the tracking
+panel (`/manage`, View on a student). Dropdowns list only active master values. After submitting, the student sees whom to
 contact with a query (email ID and mobile number from the API settings below).
 
 ## Run locally

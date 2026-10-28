@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AuthLayout } from '../components/AuthLayout';
+import { CasteEligibility, EligibilityConfirmed, rememberConfirmation, rememberedConfirmation } from '../components/CasteEligibility';
 import { Field, Notice, PasswordInput } from '../components/ui';
 import { serverMessage, toFailure, useLang, type Failure, type Pick } from '../i18n';
 import { useStudent } from '../session';
@@ -36,6 +37,7 @@ export default function RegisterPage() {
   const [serverFields, setServerFields] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState<Failure | null>(null);
   const [busy, setBusy] = useState(false);
+  const [eligible, setEligible] = useState(rememberedConfirmation);
 
   if (user) return <Navigate to="/application" replace />;
   const errors = { ...(submitted ? check(v, T) : {}), ...serverFields };
@@ -95,8 +97,27 @@ export default function RegisterPage() {
     </Field>
   );
 
+  /* First the caste eligibility (as on the login page); the create-account form opens once it is confirmed. */
+  if (!eligible)
+    return (
+      <AuthLayout wide>
+        <CasteEligibility
+          proceedLabel={T('खाते तयार करण्यासाठी पुढे जा', 'Proceed to Create Account')}
+          onConfirm={() => {
+            rememberConfirmation(true);
+            setEligible(true);
+          }}
+        />
+        <div className="sep" />
+        <p className="center fs13" style={{ margin: 0 }}>
+          {T('आधीच खाते आहे?', 'Already have an account?')} <Link to="/login">{T('लॉगिन करा', 'Login')}</Link>
+        </p>
+      </AuthLayout>
+    );
+
   return (
     <AuthLayout wide>
+      <EligibilityConfirmed onChange={() => setEligible(false)} />
       <h1>{T('खाते तयार करा', 'Create account')}</h1>
       <p className="sub">
         {T('येथे खाते तयार करा, नंतर ', 'Create your account here, then use your ')}

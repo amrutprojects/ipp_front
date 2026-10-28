@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, type PageMeta } from '../../api';
-import { fmtDate, Footer, Header, Notice } from '../../components/ui';
-import { useManage } from '../../session';
+import { fmtDate, Footer, Notice } from '../../components/ui';
 import { FOLLOW_UP_STATUS, type Applicant, type FollowUpStatus, type Stage, type Summary } from '../../types';
+import { useCanEdit } from '../../session';
 import FollowUpDialog from './FollowUpDialog';
+import { ManageHeader, ManageNav } from './ManageLayout';
 
 const LIMIT = 25;
 
@@ -20,7 +22,7 @@ function FollowUpIcon() {
 
 /* The EDP tracking panel: every portal account and how far it got (account → OTP → step 1 → step 2 → submitted). */
 export default function ManagePage() {
-  const { user, signOut } = useManage();
+  const canEdit = useCanEdit();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<Applicant[]>([]);
   const [meta, setMeta] = useState<PageMeta | null>(null);
@@ -89,23 +91,11 @@ export default function ManagePage() {
     });
   };
 
-  const right = (
-    <>
-      <span className="who">
-        Tracking panel
-        <br />
-        <small>{user?.email}</small>
-      </span>
-      <button className="btn light sm" onClick={signOut}>
-        Logout
-      </button>
-    </>
-  );
-
   return (
     <>
-      <Header right={right} />
+      <ManageHeader />
       <main className="page" style={{ maxWidth: 1640 }}>
+        <ManageNav />
         <div className="row" style={{ marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Student tracking</h2>
           <span className="spacer" />
@@ -221,12 +211,15 @@ export default function ManagePage() {
                     <td className="nowrap">{fmtDate(r.last_activity_at)}</td>
                     <td className="sticky-end">
                       <div className="fu-cell">
+                        <Link className="btn ghost sm" to={`/manage/applicants/${encodeURIComponent(r.id)}`} aria-label={`View ${r.name}`}>
+                          View
+                        </Link>
                         <button
                           type="button"
                           className="icon-btn"
                           onClick={() => setFollowing(r)}
                           aria-label={`Follow-up: ${r.name}`}
-                          title="Add a follow-up"
+                          title={canEdit ? 'Add a follow-up' : 'Follow-up history'}
                         >
                           <FollowUpIcon />
                         </button>
@@ -265,11 +258,13 @@ export default function ManagePage() {
           </div>
         ) : null}
         <p className="hint mt16">
-          Fully submitted forms are also in the Amrut admin panel under Student Registrations. Students who stopped at a step can be contacted
-          from this list; record each call with the follow-up icon.
+          Open a student with View to see the full form and documents. Students who stopped at a step can be contacted from this list;
+          record each call with the follow-up icon.
         </p>
       </main>
-      {following ? <FollowUpDialog applicant={following} onClose={closeFollowUp} onSaved={() => void load()} /> : null}
+      {following ? (
+        <FollowUpDialog applicant={following} onClose={closeFollowUp} onSaved={() => void load()} readOnly={!canEdit} />
+      ) : null}
       <Footer />
     </>
   );

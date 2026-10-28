@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { api } from '../api';
+import { api, ApiError, type Realm } from '../api';
 import { useLang } from '../i18n';
 import type { Options } from '../types';
 
@@ -157,6 +157,38 @@ export function useOptions(): Options | null {
   return options;
 }
 
+/*
+ * A list that depends on an earlier choice (a district's talukas, a centre's technologies), loaded from `path`; null =
+ * nothing chosen yet. Only the answer for the newest path is kept: a slow answer for an earlier choice is ignored.
+ * `path` in the result says which choice the items belong to.
+ */
+export interface RemoteList<T> {
+  path: string | null;
+  items: T[];
+  status: 'idle' | 'loading' | 'ok' | 'error';
+  error: ApiError | null;
+}
+export function useRemoteList<T>(path: string | null, realm?: Realm): RemoteList<T> {
+  const [state, setState] = useState<RemoteList<T>>({ path: null, items: [], status: 'idle', error: null });
+  const seq = useRef(0);
+  useEffect(() => {
+    const id = ++seq.current;
+    if (!path) {
+      setState({ path, items: [], status: 'idle', error: null });
+      return;
+    }
+    setState({ path, items: [], status: 'loading', error: null });
+    api<T[]>(path, { realm })
+      .then((r) => id === seq.current && setState({ path, items: r.data ?? [], status: 'ok', error: null }))
+      .catch((e: unknown) => {
+        if (id !== seq.current) return;
+        setState({ path, items: [], status: 'error', error: e instanceof ApiError ? e : new ApiError('Could not load the list', 0) });
+      });
+  }, [path, realm]);
+  /* Until the effect has run for a new path, the old items do not belong to it. */
+  return state.path === path ? state : { path, items: [], status: path ? 'loading' : 'idle', error: null };
+}
+
 /* Shown at the foot of every portal page: the documents to keep ready (the active document types). */
 export function DocumentsReady() {
   const options = useOptions();
@@ -168,7 +200,7 @@ export function DocumentsReady() {
         {options.document_types.map((d) => (
           <li key={d.code}>
             {d.name}
-            {d.is_mandatory ? <span className="req"> *</span> : <span className="muted"> (if applicable)</span>}
+            {d.is_mandatory ? <span className="req"> *</span> : /optional/i.test(d.name) ? null : <span className="muted"> (optional)</span>}
           </li>
         ))}
       </ol>

@@ -7,7 +7,18 @@ import { FOLLOW_UP_NOTE_MAX, FOLLOW_UP_STATUS, type Applicant, type FollowUp, ty
  * Follow-up of one student: record a status (Pending follow-up, Follow-up call, Second follow-up, Form filled) with an
  * optional note, and see every earlier follow-up (newest first, who recorded it and when). Each save adds to the history.
  */
-export default function FollowUpDialog({ applicant, onClose, onSaved }: { applicant: Applicant; onClose: () => void; onSaved: () => void }) {
+export default function FollowUpDialog({
+  applicant,
+  onClose,
+  onSaved,
+  readOnly = false,
+}: {
+  applicant: Applicant;
+  onClose: () => void;
+  onSaved: () => void;
+  /* A view-only account: the history without the form to add a follow-up. */
+  readOnly?: boolean;
+}) {
   const [history, setHistory] = useState<FollowUp[] | null>(null);
   const [historyFailed, setHistoryFailed] = useState(false);
   /* Starts from the list row; replaced by the latest saved status once the history arrives, unless already changed. */
@@ -66,59 +77,67 @@ export default function FollowUpDialog({ applicant, onClose, onSaved }: { applic
         <a href={`tel:${applicant.mobile_number}`}>{applicant.mobile_number}</a> ·{' '}
         <a href={`mailto:${applicant.email}`}>{applicant.email}</a>
       </p>
-      <form onSubmit={save} noValidate>
-        {error ? <Notice tone="error">{error}</Notice> : null}
-        {saved ? <Notice tone="ok">Follow-up saved.</Notice> : null}
-        <div className="grid one">
-          <Field id="fu-status" label="Follow-up status" error={fieldErrors.status}>
-            <select
-              id="fu-status"
-              className="inp"
-              value={status}
-              onChange={(e) => {
-                touched.current = true;
-                setStatus(e.target.value as FollowUpStatus);
-                setSaved(false);
-              }}
-              data-autofocus
-            >
-              {Object.entries(FOLLOW_UP_STATUS).map(([code, label]) => (
-                <option key={code} value={code}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field
-            id="fu-note"
-            label="Note"
-            required={false}
-            error={fieldErrors.note}
-            hint={`What was discussed, the next step, a callback time… (${note.length}/${FOLLOW_UP_NOTE_MAX})`}
-          >
-            <textarea
-              id="fu-note"
-              className="inp"
-              rows={3}
-              maxLength={FOLLOW_UP_NOTE_MAX}
-              value={note}
-              onChange={(e) => {
-                setNote(e.target.value);
-                setSaved(false);
-              }}
-              placeholder="e.g. Called at 11 am, will upload documents by Friday"
-            />
-          </Field>
-        </div>
+      {readOnly ? (
         <div className="actions">
-          <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
+          <button type="button" className="btn ghost" onClick={onClose} data-autofocus>
             Close
           </button>
-          <button type="submit" className="btn" disabled={busy}>
-            {busy ? 'Saving…' : 'Save follow-up'}
-          </button>
         </div>
-      </form>
+      ) : (
+        <form onSubmit={save} noValidate>
+          {error ? <Notice tone="error">{error}</Notice> : null}
+          {saved ? <Notice tone="ok">Follow-up saved.</Notice> : null}
+          <div className="grid one">
+            <Field id="fu-status" label="Follow-up status" error={fieldErrors.status}>
+              <select
+                id="fu-status"
+                className="inp"
+                value={status}
+                onChange={(e) => {
+                  touched.current = true;
+                  setStatus(e.target.value as FollowUpStatus);
+                  setSaved(false);
+                }}
+                data-autofocus
+              >
+                {Object.entries(FOLLOW_UP_STATUS).map(([code, label]) => (
+                  <option key={code} value={code}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              id="fu-note"
+              label="Note"
+              required={false}
+              error={fieldErrors.note}
+              hint={`What was discussed, the next step, a callback time… (${note.length}/${FOLLOW_UP_NOTE_MAX})`}
+            >
+              <textarea
+                id="fu-note"
+                className="inp"
+                rows={3}
+                maxLength={FOLLOW_UP_NOTE_MAX}
+                value={note}
+                onChange={(e) => {
+                  setNote(e.target.value);
+                  setSaved(false);
+                }}
+                placeholder="e.g. Called at 11 am, will upload documents by Friday"
+              />
+            </Field>
+          </div>
+          <div className="actions">
+            <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
+              Close
+            </button>
+            <button type="submit" className="btn" disabled={busy}>
+              {busy ? 'Saving…' : 'Save follow-up'}
+            </button>
+          </div>
+        </form>
+      )}
 
       <section className="fu-history" aria-labelledby="fu-history-title">
         <h4 id="fu-history-title">History</h4>

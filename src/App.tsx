@@ -2,13 +2,20 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import ApplicationPage from './pages/ApplicationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import LoginPage from './pages/LoginPage';
+import ApplicantDetailPage from './pages/manage/ApplicantDetailPage';
 import ManageLoginPage from './pages/manage/ManageLoginPage';
+import CentreDetailPage from './pages/manage/CentreDetailPage';
+import CentreFormPage from './pages/manage/CentreFormPage';
+import CentresPage from './pages/manage/CentresPage';
 import ManagePage from './pages/manage/ManagePage';
+import SettingsPage from './pages/manage/SettingsPage';
+import UserFormPage from './pages/manage/UserFormPage';
+import UsersPage from './pages/manage/UsersPage';
 import RegisterPage from './pages/RegisterPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyPage from './pages/VerifyPage';
 import { LangProvider } from './i18n';
-import { RequireManage, RequireStudent, SessionProvider } from './session';
+import { RequireManage, RequireManageAdmin, RequireStudent, SessionProvider } from './session';
 
 /* edp.sumago.ai: the student portal at /, the tracking panel at /manage. */
 export default function App() {
@@ -36,6 +43,70 @@ export default function App() {
             element={
               <RequireManage>
                 <ManagePage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/applicants/:id"
+            element={
+              <RequireManage>
+                <ApplicantDetailPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/centres"
+            element={
+              <RequireManage>
+                <CentresPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/centres/new"
+            element={
+              <RequireManageAdmin viewerTo="/manage/centres">
+                <CentreFormPage />
+              </RequireManageAdmin>
+            }
+          />
+          <Route
+            path="/manage/centres/:id"
+            element={
+              <RequireManage>
+                <CentreDetailPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/centres/:id/edit"
+            element={
+              <RequireManageAdmin viewerTo="/manage/centres">
+                <CentreFormPage />
+              </RequireManageAdmin>
+            }
+          />
+          <Route
+            path="/manage/users"
+            element={
+              <RequireManageAdmin viewerTo="/manage">
+                <UsersPage />
+              </RequireManageAdmin>
+            }
+          />
+          <Route
+            path="/manage/users/new"
+            element={
+              <RequireManageAdmin viewerTo="/manage">
+                <UserFormPage />
+              </RequireManageAdmin>
+            }
+          />
+          <Route
+            path="/manage/settings"
+            element={
+              <RequireManage>
+                <SettingsPage />
               </RequireManage>
             }
           />

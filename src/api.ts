@@ -114,6 +114,33 @@ export async function openFile(path: string, realm: Realm): Promise<void> {
   }
 }
 
+/* The file name a download response gives (Content-Disposition filename*, else filename), or the fallback. */
+export function downloadName(disposition: string | null, fallback: string): string {
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition ?? '');
+  if (star) {
+    try {
+      return decodeURIComponent(star[1]);
+    } catch {
+      /* fall through to the plain name */
+    }
+  }
+  return /filename="([^"]+)"/i.exec(disposition ?? '')?.[1] ?? fallback;
+}
+
+/* Downloads a file with the realm's token and saves it under the name the server gives. */
+export async function downloadFile(path: string, realm: Realm, fallbackName: string): Promise<void> {
+  const res = await fetch(`${BASE}/edp${path}`, { headers: { Authorization: `Bearer ${tokens.get(realm) ?? ''}` } });
+  if (!res.ok) throw new Error('Could not download the file');
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = downloadName(res.headers.get('Content-Disposition'), fallbackName);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export interface PageMeta {
   page: number;
   limit: number;

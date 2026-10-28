@@ -5,10 +5,12 @@ import { AuthLayout } from '../../components/AuthLayout';
 import { Field, Notice, PasswordInput } from '../../components/ui';
 import { serverMessage, toFailure, useLang, type Failure } from '../../i18n';
 import { useManage } from '../../session';
+import type { Admin } from '../../types';
 
 interface ManageSession {
   token: string;
-  admin: { id: string; name: string; email: string };
+  expires_at?: string;
+  admin: Admin;
 }
 
 export default function ManageLoginPage() {

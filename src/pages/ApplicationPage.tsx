@@ -1,19 +1,51 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { api, ApiError, openFile } from '../api';
-import { ddmmyyyy, DocumentsReady, Field, fmtDate, Footer, Header, Modal, Notice, useOptions } from '../components/ui';
+import { SupportMessage } from '../components/SupportMessage';
+import { ddmmyyyy, DocumentsReady, Field, fmtDate, Footer, Header, Modal, Notice, useOptions, useRemoteList } from '../components/ui';
 import { useStudent } from '../session';
-import { BASIC_FIELDS, MAIN_FIELDS, type Application, type Form, type FormField, type Options, type Submitted } from '../types';
-import { ACCEPT, BARCODE_RE, checkFields, FIELD_LABELS, fileIssue, MAX_FILE_MB } from '../validation';
+import {
+  BASIC_FIELDS,
+  MAIN_FIELDS,
+  type Application,
+  type DocumentType,
+  type Form,
+  type FormField,
+  type GeoRef,
+  type Options,
+  type Submitted,
+  type TechnologyOption,
+} from '../types';
+import { checkFields, FIELD_LABELS, fileIssue, fileRule, isCgpa, isDisabled, localToday } from '../validation';
 
 const STEPS = ['Basic Details', 'Main Form', 'Upload Documents'] as const;
 const STEP_FIELDS: Record<number, readonly FormField[]> = { 1: BASIC_FIELDS, 2: MAIN_FIELDS };
 const DECLARATION =
   'I hereby declare that all the above information is true to my personal knowledge and belief. Also, these are true copies of the original documents. I am aware that if the said information and documents are found to be false, a case will be registered against me under the Indian Penal Code and/or the relevant law, and I will be liable for punishment accordingly.';
 const STATUS_LABEL: Record<string, string> = {
+  SUBMITTED: 'Submitted',
   REGISTRATION_PENDING: 'Received – pending verification',
   RECEIVED: 'Received',
 };
 const kb = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+/* The self-declaration form the student downloads, fills in and uploads (served from public/). */
+export const SELF_DECLARATION_HREF = '/Self-Declaration_Form.pdf';
+
+/* The documents of step 3 are exactly the server's list, in its order; a document is required when it is mandatory. */
+export const docRequired = (t: DocumentType) => t.is_mandatory;
+const YES_NO = ['Yes', 'No'];
+
+/* The name of a field error key, for the list of what to correct. */
+function labelOf(key: string, options: Options): string {
+  if (key === 'declaration') return 'Declaration';
+  const [kind, code] = key.split('.');
+  const doc = options.document_types.find((t) => t.code === code)?.name ?? code;
+  if (kind === 'files' && code) return doc ?? key;
+  return FIELD_LABELS[key as FormField] ?? key;
+}
+const correctThese = (e: Record<string, string>, options: Options) => {
+  const keys = Object.keys(e).filter((k) => e[k]);
+  return keys.length ? `Please correct the highlighted fields: ${keys.map((k) => labelOf(k, options)).join(', ')}.` : '';
+};
 
 /* Which step a server field error belongs to. */
 function stepOf(field: string): number {
@@ -120,7 +152,6 @@ function FormWizard({
   /* Resume where the student stopped. */
   const [step, setStep] = useState(() => Math.min(Math.max(app.current_step, 1), 3));
   const [form, setForm] = useState<Form>(app.form);
-  const [barcodes, setBarcodes] = useState<Record<string, string>>(app.barcodes ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'offline'>('idle');
@@ -132,6 +163,16 @@ function FormWizard({
   const [preview, setPreview] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const maxStep = app.current_step;
+  const ruleCtx = { options };
+  /* "Same as current address": the permanent address follows the current one while ticked. */
+  const [sameAddress, setSameAddress] = useState(() => !!app.form.current_address && app.form.permanent_address === app.form.current_address);
+  /* Why a saved choice was cleared (no longer offered). */
+  const [technologyWarning, setTechnologyWarning] = useState('');
+  const [talukaWarning, setTalukaWarning] = useState('');
+  const talukas = useRemoteList<GeoRef>(form.district_id ? `/districts/${encodeURIComponent(form.district_id)}/talukas` : null);
+  const technologies = useRemoteList<TechnologyOption>(
+    form.centre_id ? `/centres/${encodeURIComponent(form.centre_id)}/technologies` : null,
+  );
 
   /* Autosave: changed values per step, sent 1.2 s after the last keystroke (complete=false: kept as typed). */
   const pending = useRef<Record<number, Record<string, string>>>({});
@@ -186,9 +227,12 @@ function FormWizard({
   useEffect(() => {
     const saved = readPending(accountId);
     if (!Object.keys(saved).length) return;
+    /* Step 3 has nothing to autosave any more: an entry left by an older portal version is dropped, not sent. */
+    delete saved[3];
+    writePending(accountId, saved);
+    if (!Object.keys(saved).length) return;
     pending.current = saved;
     setForm((f) => ({ ...f, ...(saved[1] ?? {}), ...(saved[2] ?? {}) }));
-    setBarcodes((b) => ({ ...b, ...(saved[3] ?? {}) }));
     void flush();
   }, [accountId, flush]);
   useEffect(() => {
@@ -205,12 +249,71 @@ function FormWizard({
     if (errors[f]) setErrors((e) => ({ ...e, [f]: '' }));
     markDirty(stepOf(f), f, value);
   };
-  const setBarcode = (code: string, value: string) => {
-    const v = value.replace(/\D/g, '').slice(0, 18);
-    setBarcodes((b) => ({ ...b, [code]: v }));
-    setErrors((e) => ({ ...e, [`barcodes.${code}`]: '' }));
-    markDirty(3, code, v);
+  /* A dependent value is cleared at once (and saved) when what it depends on changes. */
+  const clearField = (f: FormField) => {
+    if (form[f]) setField(f)('');
   };
+  const onCurrentAddress = (v: string) => {
+    setField('current_address')(v);
+    if (sameAddress) setField('permanent_address')(v);
+  };
+  const onSameAddress = (checked: boolean) => {
+    setSameAddress(checked);
+    if (checked) setField('permanent_address')(form.current_address ?? '');
+  };
+  const onDistrict = (v: string) => {
+    setField('district_id')(v);
+    clearField('taluka_id');
+    setTalukaWarning('');
+  };
+  const onDisability = (v: string) => {
+    setField('disability_status')(v);
+    if (v !== 'Yes') {
+      clearField('disability_type');
+      clearField('disability_certificate_number');
+      setErrors((e) => ({ ...e, disability_type: '', disability_certificate_number: '' }));
+    }
+  };
+  const onCentre = (v: string) => {
+    setField('centre_id')(v);
+    setField('technology')('');
+    setTechnologyWarning('');
+  };
+  const onGrading = (v: string) => {
+    setField('grading_type')(v);
+    if (v !== 'CGPA') {
+      clearField('cgpa_scale');
+      setErrors((e) => ({ ...e, cgpa_scale: '' }));
+    }
+  };
+
+  /* A saved centre that is no longer active (not in the options) is cleared, with its technology. */
+  useEffect(() => {
+    if (!Array.isArray(options.centres) || !form.centre_id || options.centres.some((c) => c.id === form.centre_id)) return;
+    setField('centre_id')('');
+    clearField('technology');
+    setTechnologyWarning('The center you chose earlier is no longer available. Please choose the center and technology again.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options.centres]);
+  /* On resume (or after a reload of the list): a saved technology the centre no longer offers is cleared, and said so. */
+  useEffect(() => {
+    if (!technologies.path) return;
+    if (technologies.status === 'ok' && form.technology && !technologies.items.some((t) => t.code === form.technology)) {
+      setField('technology')('');
+      setTechnologyWarning('The technology you chose earlier is no longer offered at this center. Please choose a technology again.');
+    } else if (technologies.status === 'error' && technologies.error?.status === 404) {
+      clearField('technology');
+      setTechnologyWarning('The selected center is not available any more. Please choose another center.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [technologies.status, technologies.path]);
+  useEffect(() => {
+    if (talukas.status === 'ok' && form.taluka_id && !talukas.items.some((t) => t.id === form.taluka_id)) {
+      setField('taluka_id')('');
+      setTalukaWarning('The taluka you chose earlier is no longer available. Please choose it again.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [talukas.status, talukas.path]);
 
   const go = (s: number) => {
     setStep(s);
@@ -220,9 +323,9 @@ function FormWizard({
 
   /* Save & Next: the step is checked here first; only a complete step asks "are you sure?". */
   const requestNext = () => {
-    const local = checkFields(form, STEP_FIELDS[step]!);
+    const local = checkFields(form, STEP_FIELDS[step]!, ruleCtx);
     setErrors(local);
-    setFailure(Object.keys(local).length ? 'Please correct the highlighted fields.' : '');
+    setFailure(correctThese(local, options));
     if (!Object.keys(local).length) setConfirmNext(true);
   };
 
@@ -235,7 +338,7 @@ function FormWizard({
         setConfirmNext(false);
         return fail(NOT_SAVED);
       }
-      const data = Object.fromEntries(fields.map((f) => [f, form[f]]));
+      const data = Object.fromEntries(fields.map((f) => [f, form[f] ?? '']));
       const res = await api<Application>(`/application/steps/${step}`, { method: 'PUT', realm: 'student', body: { complete: true, data } });
       setConfirmNext(false);
       onApp(res.data);
@@ -251,7 +354,10 @@ function FormWizard({
 
   const upload = async (code: string, file: File | undefined) => {
     if (!file) return;
-    const issue = fileIssue(file);
+    const issue = fileIssue(
+      file,
+      options.document_types.find((t) => t.code === code),
+    );
     if (issue) return setErrors((e) => ({ ...e, [`files.${code}`]: issue }));
     setUploading(code);
     setErrors((e) => ({ ...e, [`files.${code}`]: '' }));
@@ -277,19 +383,17 @@ function FormWizard({
 
   /* Before the preview: everything the server will check, so the student is sent to the right step. */
   const checkAll = (): boolean => {
-    const e: Record<string, string> = checkFields(form, [...BASIC_FIELDS, ...MAIN_FIELDS]);
+    const e: Record<string, string> = checkFields(form, [...BASIC_FIELDS, ...MAIN_FIELDS], ruleCtx);
     const has = (code: string) => app.draft_files.some((f) => f.doc_type === code);
+    /* Only the listed types count: a draft file of a type no longer listed is ignored (as on the server). */
     for (const t of options.document_types) {
-      if (t.is_mandatory && !has(t.code)) e[`files.${t.code}`] = `${t.name} is required`;
-      const bc = barcodes[t.code]?.trim() ?? '';
-      if (bc && !BARCODE_RE.test(bc)) e[`barcodes.${t.code}`] = 'Barcode must be exactly 18 digits';
-      else if (has(t.code) && t.barcode === 'required' && !bc) e[`barcodes.${t.code}`] = `${t.name} barcode is required`;
+      if (docRequired(t) && !has(t.code)) e[`files.${t.code}`] = `${t.name} is required`;
     }
     if (!declaration) e.declaration = 'Please accept the declaration';
     setErrors(e);
     const first = Object.keys(e).map(stepOf).sort()[0];
     if (first && first !== step) go(first);
-    setFailure(Object.keys(e).length ? 'Please correct the highlighted fields.' : '');
+    setFailure(correctThese(e, options));
     return !Object.keys(e).length;
   };
 
@@ -297,19 +401,29 @@ function FormWizard({
    * The previewed values must be the saved ones: anything still unsaved is sent first, and if that fails nothing is
    * submitted (the server registers the saved draft).
    */
+  /* Set synchronously, so a second click (or Enter) before React re-renders cannot send the form twice. */
+  const submitting = useRef(false);
+  const requestSubmit = () => {
+    if (!submitting.current && checkAll()) setConfirmSubmit(true);
+  };
   const submit = async () => {
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     setFailure('');
     let res: { data: Submitted };
     try {
       if (!(await flush())) {
+        submitting.current = false;
         setConfirmSubmit(false);
         setPreview(false);
+        setBusy(false);
         return fail(NOT_SAVED);
       }
-      const body = { declaration_accepted: true, barcodes: Object.fromEntries(Object.entries(barcodes).filter(([, v]) => v !== undefined)) };
+      const body = { declaration_accepted: true };
       res = await api<Submitted>('/application/submit', { method: 'POST', realm: 'student', body });
     } catch (err) {
+      submitting.current = false;
       setConfirmSubmit(false);
       setPreview(false);
       setBusy(false);
@@ -339,8 +453,20 @@ function FormWizard({
       {...extra}
     />
   );
-  const select = (f: FormField, items: { value: string; label: string }[], placeholder: string) => (
-    <select id={`f-${f}`} className="inp" value={form[f] ?? ''} onChange={(e) => setField(f)(e.target.value)} aria-invalid={!!errors[f] || undefined}>
+  const select = (
+    f: FormField,
+    items: { value: string; label: string }[],
+    placeholder: string,
+    extra: { onChange?: (v: string) => void; disabled?: boolean } = {},
+  ) => (
+    <select
+      id={`f-${f}`}
+      className="inp"
+      value={form[f] ?? ''}
+      onChange={(e) => (extra.onChange ?? setField(f))(e.target.value)}
+      aria-invalid={!!errors[f] || undefined}
+      disabled={extra.disabled}
+    >
       <option value="">{placeholder}</option>
       {items.map((o) => (
         <option key={o.value} value={o.value}>
@@ -349,12 +475,54 @@ function FormWizard({
       ))}
     </select>
   );
-  const field = (f: FormField, control: ReactNode, wide = false, hint?: string) => (
-    <Field id={`f-${f}`} label={FIELD_LABELS[f]} error={errors[f]} wide={wide} hint={hint}>
+  const field = (f: FormField, control: ReactNode, wide = false, hint?: ReactNode, required = true, label = FIELD_LABELS[f]) => (
+    <Field id={`f-${f}`} label={label} error={errors[f]} wide={wide} hint={hint} required={required}>
       {control}
     </Field>
   );
-  const today = new Date().toISOString().slice(0, 10);
+  /* Yes / No (or any short choice) as radio buttons: a fieldset named by its legend, arrow keys move between them. */
+  const radios = (f: FormField, items: string[], onPick: (v: string) => void = setField(f), hint?: ReactNode) => {
+    const described = errors[f] ? `f-${f}-err` : hint ? `f-${f}-hint` : undefined;
+    return (
+      <fieldset className="field radios" aria-describedby={described}>
+        <legend className="label">
+          {FIELD_LABELS[f]} <span className="req">*</span>
+        </legend>
+        <div className="radio-row">
+          {items.map((v, i) => (
+            <label key={v} className="radio">
+              <input
+                type="radio"
+                id={i === 0 ? `f-${f}` : `f-${f}-${i}`}
+                name={`f-${f}`}
+                value={v}
+                checked={form[f] === v}
+                onChange={() => onPick(v)}
+                aria-invalid={!!errors[f] || undefined}
+              />
+              {v}
+            </label>
+          ))}
+        </div>
+        {errors[f] ? (
+          <span className="err" role="alert" id={`f-${f}-err`}>
+            {errors[f]}
+          </span>
+        ) : hint ? (
+          <span className="hint" id={`f-${f}-hint`}>
+            {hint}
+          </span>
+        ) : null}
+      </fieldset>
+    );
+  };
+  const today = localToday();
+  const listOf = (items: string[] | undefined) => (items ?? []).map((v) => ({ value: v, label: v }));
+
+  const allCentres = options.centres ?? [];
+  const technologyState = !form.centre_id ? 'none' : technologies.status;
+  const noTechnologies = technologyState === 'ok' && technologies.items.length === 0;
+  const talukaState = !form.district_id ? 'none' : talukas.status;
 
   return (
     <>
@@ -376,9 +544,7 @@ function FormWizard({
 
       <section className="card" aria-labelledby="step-title">
         <div className="row">
-          <h2 id="step-title">
-            Step {step} of 3 – {STEPS[step - 1]}
-          </h2>
+          <h2 id="step-title">{step === 3 ? STEPS[2] : `Step ${step} of 3 – ${STEPS[step - 1]}`}</h2>
           <span className="spacer" />
           <span className="save-state" aria-live="polite">
             {saveState === 'saving'
@@ -392,7 +558,7 @@ function FormWizard({
         </div>
         <p className="sub">
           {step === 3
-            ? 'Upload a scanned copy of each document. Fields marked * are mandatory.'
+            ? 'Please fill in all required fields marked with *'
             : 'Your answers are saved as you type, so you can log out and continue later. Fields marked * are mandatory.'}
         </p>
         {failure ? <Notice tone="error">{failure}</Notice> : null}
@@ -418,10 +584,66 @@ function FormWizard({
                 className="inp"
                 maxLength={500}
                 value={form.current_address ?? ''}
-                onChange={(e) => setField('current_address')(e.target.value)}
+                onChange={(e) => onCurrentAddress(e.target.value)}
                 aria-invalid={!!errors.current_address || undefined}
               />,
               true,
+            )}
+            <label className="check-row wide">
+              <input type="checkbox" checked={sameAddress} onChange={(e) => onSameAddress(e.target.checked)} />
+              Permanent address is the same as the current address
+            </label>
+            {field(
+              'permanent_address',
+              <textarea
+                id="f-permanent_address"
+                className="inp"
+                maxLength={500}
+                value={form.permanent_address ?? ''}
+                onChange={(e) => setField('permanent_address')(e.target.value)}
+                readOnly={sameAddress}
+                aria-invalid={!!errors.permanent_address || undefined}
+              />,
+              true,
+              sameAddress ? 'Copied from the current address. Untick the box above to enter a different address.' : undefined,
+            )}
+            {field('landmark', input('landmark', 'text', { maxLength: 150 }), false, undefined, false)}
+            {field(
+              'pin_code',
+              input('pin_code', 'text', {
+                inputMode: 'numeric',
+                maxLength: 6,
+                placeholder: '6-digit PIN code',
+                autoComplete: 'postal-code',
+                onChange: (e: ChangeEvent<HTMLInputElement>) => setField('pin_code')(e.target.value.replace(/\D/g, '').slice(0, 6)),
+              }),
+            )}
+            {field(
+              'district_id',
+              select(
+                'district_id',
+                (options.districts ?? []).map((d) => ({ value: d.id, label: d.name })),
+                'Select district',
+                { onChange: onDistrict },
+              ),
+            )}
+            {field(
+              'taluka_id',
+              select(
+                'taluka_id',
+                talukas.items.map((t) => ({ value: t.id, label: t.name })),
+                talukaState === 'none' ? 'Select a district first' : talukaState === 'loading' ? 'Loading talukas…' : 'Select taluka',
+                { disabled: talukaState !== 'ok' || !talukas.items.length },
+              ),
+              false,
+              talukaWarning ||
+                (talukaState === 'none'
+                  ? 'Choose your district to see its talukas.'
+                  : talukaState === 'error'
+                    ? 'Could not load the talukas. Check your connection and choose the district again.'
+                    : talukaState === 'ok' && !talukas.items.length
+                      ? 'No talukas are available for this district.'
+                      : undefined),
             )}
             {field('aadhaar_number', input('aadhaar_number', 'text', { inputMode: 'numeric', maxLength: 14, placeholder: '12-digit Aadhaar number' }))}
             {field('mobile_number', input('mobile_number', 'tel', { maxLength: 15, autoComplete: 'tel' }))}
@@ -441,6 +663,34 @@ function FormWizard({
                 'Select caste',
               ),
             )}
+            {field('gender', select('gender', listOf(options.genders), 'Select gender'))}
+            {field('marital_status', select('marital_status', listOf(options.marital_statuses), 'Select marital status'))}
+            {field(
+              'alternate_mobile_number',
+              input('alternate_mobile_number', 'tel', { maxLength: 15 }),
+              false,
+              'Optional. A different number we can reach you on.',
+              false,
+            )}
+            {field(
+              'alternate_email',
+              input('alternate_email', 'email', { maxLength: 254 }),
+              false,
+              'Optional. Different from the email ID of your account.',
+              false,
+            )}
+            {radios('disability_status', YES_NO, onDisability)}
+            {isDisabled(form) ? (
+              <>
+                {field('disability_type', input('disability_type', 'text', { maxLength: 100 }))}
+                {field(
+                  'disability_certificate_number',
+                  input('disability_certificate_number', 'text', { maxLength: 50 }),
+                  false,
+                  'As printed on the certificate: letters, digits, / and - (4–50 characters). You will upload the certificate in step 3.',
+                )}
+              </>
+            ) : null}
           </div>
         ) : null}
 
@@ -451,17 +701,55 @@ function FormWizard({
               select(
                 'region_id',
                 options.regions.map((r) => ({ value: r.id, label: r.name })),
-                'Select course centre',
+                'Select course district',
+              ),
+            )}
+            {field(
+              'centre_id',
+              select(
+                'centre_id',
+                allCentres.map((c) => ({ value: c.id, label: c.district_name ? `${c.name} (${c.district_name})` : c.name })),
+                'Select center',
+                { onChange: onCentre },
               ),
             )}
             {field(
               'technology',
               select(
                 'technology',
-                options.tracks.map((t) => ({ value: t.code, label: t.name })),
-                'Select technology',
+                technologies.items.map((t) => ({ value: t.code, label: t.name })),
+                technologyState === 'none'
+                  ? 'Select a center first'
+                  : technologyState === 'loading'
+                    ? 'Loading technologies…'
+                    : noTechnologies
+                      ? 'No technologies at this center'
+                      : 'Select technology',
+                {
+                  disabled: technologyState !== 'ok' || noTechnologies,
+                  onChange: (v) => {
+                    setField('technology')(v);
+                    setTechnologyWarning('');
+                  },
+                },
               ),
+              false,
+              technologyState === 'none' ? 'Choose a center to see the technologies it offers.' : undefined,
             )}
+            {technologyWarning ? (
+              <div className="wide">
+                <Notice tone="warn">{technologyWarning}</Notice>
+              </div>
+            ) : null}
+            {noTechnologies ? (
+              <div className="wide">
+                <Notice tone="warn">No technologies are currently offered at this center. Please choose another center.</Notice>
+              </div>
+            ) : technologyState === 'error' && technologies.error?.status !== 404 ? (
+              <div className="wide">
+                <Notice tone="error">Could not load the technologies for this center. Check your connection and choose the center again.</Notice>
+              </div>
+            ) : null}
             {field(
               'education_id',
               select(
@@ -470,6 +758,55 @@ function FormWizard({
                 'Select education qualification',
               ),
             )}
+            <h3 className="wide form-section">Qualification details</h3>
+            {field(
+              'qualification_name',
+              input('qualification_name', 'text', { maxLength: 150 }),
+              false,
+              'Specify the exact qualification, e.g. "B.Sc. Agriculture" when you chose "Other Graduate".',
+            )}
+            {field('qualification_stream', input('qualification_stream', 'text', { maxLength: 150 }))}
+            {field('qualification_board', input('qualification_board', 'text', { maxLength: 200 }))}
+            {field('qualification_completed_on', input('qualification_completed_on', 'date', { max: today, min: '1950-01-01' }))}
+            {field(
+              'grading_type',
+              select(
+                'grading_type',
+                (options.grading_types ?? []).map((g) => ({ value: g.code, label: g.name })),
+                'Select grading type',
+                { onChange: onGrading },
+              ),
+            )}
+            {isCgpa(form)
+              ? field(
+                  'cgpa_scale',
+                  select(
+                    'cgpa_scale',
+                    (options.cgpa_scales ?? []).map((n) => ({ value: String(n), label: `Out of ${n}` })),
+                    'Select CGPA scale',
+                  ),
+                )
+              : null}
+            {field(
+              'score',
+              input('score', 'text', {
+                inputMode: 'decimal',
+                maxLength: 6,
+                onChange: (e: ChangeEvent<HTMLInputElement>) => {
+                  const v = e.target.value.trim();
+                  if (/^\d{0,3}(\.\d{0,2})?$/.test(v)) setField('score')(v);
+                },
+              }),
+              false,
+              isCgpa(form)
+                ? `CGPA, up to 2 decimal places${form.cgpa_scale ? ` (0–${form.cgpa_scale})` : ''}.`
+                : form.grading_type === 'PERCENTAGE'
+                  ? 'Percentage, 0–100, up to 2 decimal places.'
+                  : 'Choose the grading type first.',
+              true,
+              isCgpa(form) ? 'Score (CGPA)' : form.grading_type === 'PERCENTAGE' ? 'Score (Percentage)' : FIELD_LABELS.score,
+            )}
+            {field('qualification_class', select('qualification_class', listOf(options.qualification_classes), 'Select class / division'))}
           </div>
         ) : null}
 
@@ -477,12 +814,10 @@ function FormWizard({
           <DocumentsStep
             app={app}
             options={options}
-            barcodes={barcodes}
             errors={errors}
             uploading={uploading}
             onUpload={upload}
             onRemove={remove}
-            onBarcode={setBarcode}
             declaration={declaration}
             onDeclaration={(v) => {
               setDeclaration(v);
@@ -493,8 +828,8 @@ function FormWizard({
 
         <div className="actions">
           {step > 1 ? (
-            <button type="button" className="btn ghost" onClick={() => go(step - 1)}>
-              ← Back
+            <button type="button" className="btn ghost" onClick={() => go(step - 1)} disabled={busy}>
+              {step === 3 ? 'Previous' : '← Back'}
             </button>
           ) : (
             <span />
@@ -504,9 +839,14 @@ function FormWizard({
               Save &amp; Next →
             </button>
           ) : (
-            <button type="button" className="btn" onClick={() => checkAll() && setPreview(true)} disabled={busy || !!uploading}>
-              Preview &amp; Submit
-            </button>
+            <div className="row">
+              <button type="button" className="btn ghost" onClick={() => checkAll() && setPreview(true)} disabled={busy || !!uploading}>
+                Preview Application
+              </button>
+              <button type="button" className="btn" onClick={requestSubmit} disabled={busy || !!uploading}>
+                Submit Application
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -533,20 +873,16 @@ function FormWizard({
       ) : null}
 
       {preview ? (
-        <Modal wide title="Preview of your form before submitting" onClose={() => !busy && setPreview(false)}>
+        <Modal wide title="Preview of your application" onClose={() => setPreview(false)}>
           <p className="hint" style={{ marginTop: -6 }}>
-            This is your form as it will be submitted. Check every detail; to change anything, go back and edit it now.
+            This is your application as it will be submitted. To change anything, close the preview and edit it; when everything
+            is correct, choose Submit Application.
           </p>
-          <FormPreview form={form} options={options} app={app} barcodes={barcodes} />
-          <Notice tone="warn">
-            <b>The submission is final.</b> Once you submit, the form cannot be edited or submitted again.
-          </Notice>
+          <FormPreview form={form} options={options} app={app} talukas={talukas.items} technologies={technologies.items} />
           <div className="actions sticky">
-            <button className="btn ghost" onClick={() => setPreview(false)} disabled={busy}>
-              ← Go back and edit
-            </button>
-            <button className="btn" onClick={() => setConfirmSubmit(true)} disabled={busy} data-autofocus>
-              Submit
+            <span />
+            <button className="btn" onClick={() => setPreview(false)} data-autofocus>
+              Close
             </button>
           </div>
         </Modal>
@@ -560,7 +896,7 @@ function FormWizard({
           </p>
           <div className="actions">
             <button className="btn ghost" onClick={() => setConfirmSubmit(false)} disabled={busy} data-autofocus>
-              No, go back to the preview
+              No, go back
             </button>
             <button className="btn" onClick={() => void submit()} disabled={busy}>
               {busy ? 'Submitting…' : 'Yes, submit'}
@@ -572,100 +908,154 @@ function FormWizard({
   );
 }
 
+/* The name of a document as shown: an optional one says so (unless the name already does). */
+const docLabel = (t: DocumentType) => (t.is_mandatory || /optional/i.test(t.name) ? t.name : `${t.name} (optional)`);
+
+/*
+ * One document: its label, a file area (click, Enter / Space, or drop a file on it) showing the uploaded file's name or
+ * "No file chosen", View / Replace / Remove for an uploaded file, and the error.
+ */
+function DocumentField(props: {
+  type: DocumentType;
+  draft: Application['draft_files'][number] | undefined;
+  fileError?: string;
+  uploading: boolean;
+  onUpload: (code: string, f: File | undefined) => void;
+  onRemove: (code: string) => void;
+}) {
+  const { type: t, draft, uploading } = props;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const required = docRequired(t);
+  const rule = fileRule(t);
+  const id = `doc-${t.code}`;
+  const pick = () => {
+    if (!uploading) inputRef.current?.click();
+  };
+  const described = [`${id}-hint`, props.fileError ? `${id}-err` : ''].filter(Boolean).join(' ');
+  return (
+    <div className={`doc-field${props.fileError ? ' invalid' : ''}`}>
+      <div className="label" id={`${id}-label`}>
+        {docLabel(t)} {required ? <span className="req">*</span> : null}
+      </div>
+      <button
+        type="button"
+        id={id}
+        className={`dropzone${dragging ? ' dragging' : ''}${draft ? ' has-file' : ''}`}
+        aria-labelledby={`${id}-label ${id}-file ${id}-prompt`}
+        aria-describedby={described}
+        aria-invalid={!!props.fileError || undefined}
+        aria-busy={uploading || undefined}
+        disabled={uploading}
+        onClick={pick}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          if (!dragging) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          if (!uploading) props.onUpload(t.code, e.dataTransfer.files?.[0]);
+        }}
+      >
+        <span className="dz-file" id={`${id}-file`}>
+          {uploading ? 'Uploading…' : (draft?.original_name ?? 'No file chosen')}
+        </span>
+        <span className="dz-prompt" id={`${id}-prompt`}>
+          Click or drag file
+        </span>
+        <span className="dz-types">
+          {rule.short} · max {rule.maxMb}MB
+        </span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={rule.accept}
+        className="sr-only"
+        tabIndex={-1}
+        aria-label={`Upload ${t.name}`}
+        disabled={uploading}
+        onChange={(e) => {
+          props.onUpload(t.code, e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+      {uploading ? (
+        <div className="hint" role="status">
+          Uploading {t.name}…
+        </div>
+      ) : null}
+      {draft ? (
+        <div className="row doc-actions">
+          <span className="muted">
+            Uploaded: {draft.original_name} ({kb(draft.size_bytes)})
+          </span>
+          <button
+            type="button"
+            className="btn ghost sm"
+            aria-label={`View ${t.name}`}
+            onClick={() => void openFile(`/application/documents/${t.code}/file`, 'student').catch(() => undefined)}
+          >
+            View
+          </button>
+          <button type="button" className="btn ghost sm" aria-label={`Replace ${t.name}`} onClick={pick} disabled={uploading}>
+            Replace
+          </button>
+          <button type="button" className="btn danger sm" aria-label={`Remove ${t.name}`} onClick={() => props.onRemove(t.code)} disabled={uploading}>
+            Remove
+          </button>
+        </div>
+      ) : null}
+      <span className="hint" id={`${id}-hint`}>
+        Accepted formats: {rule.formats.join(', ')} (max {rule.maxMb}MB)
+      </span>
+      {props.fileError ? (
+        <span className="err" role="alert" id={`${id}-err`}>
+          {props.fileError}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function DocumentsStep(props: {
   app: Application;
   options: Options;
-  barcodes: Record<string, string>;
   errors: Record<string, string>;
   uploading: string | null;
   onUpload: (code: string, f: File | undefined) => void;
   onRemove: (code: string) => void;
-  onBarcode: (code: string, v: string) => void;
   declaration: boolean;
   onDeclaration: (v: boolean) => void;
 }) {
-  const { app, options, barcodes, errors, uploading } = props;
+  const { app, options, errors, uploading } = props;
   return (
     <>
-      <Notice tone="info">
-        <b>File upload guidelines.</b> Accepted formats: PDF, JPG, JPEG, PNG. Maximum file size: {MAX_FILE_MB} MB per document.
-      </Notice>
-      <div className="tbl-wrap mt16">
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Sr.</th>
-              <th>Document</th>
-              <th>Required</th>
-              <th>File</th>
-            </tr>
-          </thead>
-          <tbody>
-            {options.document_types.map((t, i) => {
-              const draft = app.draft_files.find((f) => f.doc_type === t.code);
-              const fileErr = errors[`files.${t.code}`];
-              const bcErr = errors[`barcodes.${t.code}`];
-              return (
-                <tr key={t.code}>
-                  <td>{i + 1}</td>
-                  <td>
-                    {t.name}
-                    {t.barcode ? (
-                      <div className="field mt8">
-                        <label htmlFor={`bc-${t.code}`}>
-                          {t.name} Barcode {t.barcode === 'required' ? <span className="req">*</span> : null}
-                        </label>
-                        <input
-                          id={`bc-${t.code}`}
-                          className="inp mono"
-                          inputMode="numeric"
-                          maxLength={18}
-                          placeholder="18-digit barcode number"
-                          value={barcodes[t.code] ?? ''}
-                          onChange={(e) => props.onBarcode(t.code, e.target.value)}
-                          aria-invalid={!!bcErr || undefined}
-                        />
-                        {bcErr ? <span className="err">{bcErr}</span> : null}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td>{t.is_mandatory ? <span className="badge SUBMITTED">Mandatory</span> : <span className="badge">If applicable</span>}</td>
-                  <td style={{ minWidth: 240 }}>
-                    {draft ? (
-                      <div className="row">
-                        <button
-                          type="button"
-                          className="link-btn"
-                          onClick={() => void openFile(`/application/documents/${t.code}/file`, 'student').catch(() => undefined)}
-                        >
-                          {draft.original_name}
-                        </button>
-                        <span className="muted">({kb(draft.size_bytes)})</span>
-                        <button type="button" className="btn danger sm" onClick={() => props.onRemove(t.code)}>
-                          Remove
-                        </button>
-                      </div>
-                    ) : null}
-                    <input
-                      type="file"
-                      accept={ACCEPT}
-                      className="mt8"
-                      aria-label={`Upload ${t.name}`}
-                      disabled={uploading === t.code}
-                      onChange={(e) => {
-                        props.onUpload(t.code, e.target.files?.[0]);
-                        e.target.value = '';
-                      }}
-                    />
-                    {uploading === t.code ? <div className="hint">Uploading…</div> : null}
-                    {fileErr ? <div className="err">{fileErr}</div> : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="doc-list">
+        {options.document_types.map((t) => (
+          <DocumentField
+            key={t.code}
+            type={t}
+            draft={app.draft_files.find((f) => f.doc_type === t.code)}
+            fileError={errors[`files.${t.code}`]}
+            uploading={uploading === t.code}
+            onUpload={props.onUpload}
+            onRemove={props.onRemove}
+          />
+        ))}
       </div>
+      <section className="downloads mt16" aria-labelledby="downloads-title">
+        <h3 id="downloads-title">Download documents</h3>
+        <div className="download-row">
+          <span>Self-Declaration Form</span>
+          <a href={SELF_DECLARATION_HREF} target="_blank" rel="noopener noreferrer" download>
+            Self-Declaration_Form.pdf
+          </a>
+        </div>
+      </section>
       <label className="row mt16" style={{ alignItems: 'flex-start', flexWrap: 'nowrap' }}>
         <input
           type="checkbox"
@@ -687,21 +1077,23 @@ function DocumentsStep(props: {
 
 /*
  * The whole form as it will be submitted, step by step: the details, every document type with the file (or why there is
- * none) and its barcode, and the declaration. Aadhaar is shown in full here so the student can check it.
+ * none), and the declaration. Aadhaar is shown in full here so the student can check it.
  */
 function FormPreview({
   form,
   options,
   app,
-  barcodes,
+  talukas,
+  technologies,
 }: {
   form: Form;
   options: Options;
   app: Application;
-  barcodes: Record<string, string>;
+  talukas: GeoRef[];
+  technologies: TechnologyOption[];
 }) {
-  const name = (list: { id: string; name: string }[], id: string) => list.find((x) => x.id === id)?.name ?? '—';
-  const aadhaar = form.aadhaar_number.replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ');
+  const name = (list: { id: string; name: string }[] | undefined, id: string) => list?.find((x) => x.id === id)?.name ?? '—';
+  const aadhaar = (form.aadhaar_number ?? '').replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ');
   const basic: [string, string][] = [
     ['First Name', form.first_name],
     ['Last Name', form.last_name],
@@ -713,12 +1105,14 @@ function FormPreview({
     ['Mobile Number', form.mobile_number],
     ['Religion', form.religion],
     ['Caste', name(options.castes, form.caste_id)],
-    ['Current Address', form.current_address],
+    ...basicExtraRows(form, name(options.districts, form.district_id), name(talukas, form.taluka_id)),
   ];
   const main: [string, string][] = [
-    ['Course Centre', name(options.regions, form.region_id)],
-    ['Technology / 3rd module selection', options.tracks.find((t) => t.code === form.technology)?.name ?? '—'],
+    [FIELD_LABELS.region_id, name(options.regions, form.region_id)],
+    [FIELD_LABELS.centre_id, centreLabel(options, form.centre_id)],
+    [FIELD_LABELS.technology, technologies.find((t) => t.code === form.technology)?.name ?? '—'],
     ['Education Qualification', name(options.educations, form.education_id)],
+    ...qualificationRows(form, options),
   ];
   const section = (title: string, rows: [string, string][]) => (
     <section className="preview-section">
@@ -745,17 +1139,17 @@ function FormPreview({
               <tr>
                 <th>Document</th>
                 <th>File</th>
-                <th>Barcode</th>
               </tr>
             </thead>
             <tbody>
               {options.document_types.map((t) => {
                 const draft = app.draft_files.find((f) => f.doc_type === t.code);
+                const required = docRequired(t);
                 return (
                   <tr key={t.code}>
                     <td>
-                      {t.name}
-                      {t.is_mandatory ? <span className="req"> *</span> : null}
+                      {docLabel(t)}
+                      {required ? <span className="req"> *</span> : null}
                     </td>
                     <td>
                       {draft ? (
@@ -763,11 +1157,9 @@ function FormPreview({
                           {draft.original_name} <span className="muted">({kb(draft.size_bytes)})</span>
                         </>
                       ) : (
-                        <span className="muted">Not uploaded{t.is_mandatory ? '' : ' (if applicable)'}</span>
+                        <span className="muted">Not uploaded</span>
                       )}
                     </td>
-                    {/* A barcode counts only with its document (that is what is stored), so it is shown only then. */}
-                    <td className="mono">{draft ? barcodes[t.code] || (t.barcode ? '—' : '') : ''}</td>
                   </tr>
                 );
               })}
@@ -783,8 +1175,52 @@ function FormPreview({
   );
 }
 
+/* Step 1 rows after Caste, shared by the preview and the submitted view (names of district / taluka given). */
+function basicExtraRows(form: Form, district: string, taluka: string, display?: Record<string, string | null>): [string, string][] {
+  const L = FIELD_LABELS;
+  return [
+    [L.gender, display?.gender ?? form.gender],
+    [L.marital_status, display?.marital_status ?? form.marital_status],
+    [L.alternate_mobile_number, form.alternate_mobile_number],
+    [L.alternate_email, form.alternate_email],
+    ['Current Address', form.current_address],
+    [L.permanent_address, form.permanent_address],
+    [L.landmark, form.landmark],
+    [L.district_id, district],
+    [L.taluka_id, taluka],
+    [L.pin_code, form.pin_code],
+    [L.disability_status, form.disability_status],
+    ...(isDisabled(form)
+      ? ([
+          [L.disability_type, form.disability_type],
+          [L.disability_certificate_number, form.disability_certificate_number],
+        ] as [string, string][])
+      : []),
+  ];
+}
+function centreLabel(options: Options, id: string): string {
+  const c = options.centres?.find((x) => x.id === id);
+  return c ? `${c.name}${c.district_name ? ` (${c.district_name})` : ''}` : '—';
+}
+/* The qualification block of step 2. */
+function qualificationRows(form: Form, options: Options): [string, string][] {
+  const L = FIELD_LABELS;
+  const grading = options.grading_types?.find((g) => g.code === form.grading_type)?.name ?? form.grading_type;
+  const score = !form.score ? '' : isCgpa(form) ? `${form.score}${form.cgpa_scale ? ` / ${form.cgpa_scale}` : ''}` : form.grading_type === 'PERCENTAGE' ? `${form.score}%` : form.score;
+  return [
+    [L.qualification_name, form.qualification_name],
+    [L.qualification_stream, form.qualification_stream],
+    [L.qualification_board, form.qualification_board],
+    [L.qualification_completed_on, form.qualification_completed_on ? ddmmyyyy(form.qualification_completed_on) : ''],
+    [L.grading_type, grading],
+    ...(isCgpa(form) ? ([[L.cgpa_scale, form.cgpa_scale]] as [string, string][]) : []),
+    [L.score, score],
+    [L.qualification_class, form.qualification_class],
+  ];
+}
+
 function FormDetails({ form, options, display, aadhaar }: { form: Form; options: Options; display?: Record<string, string | null>; aadhaar?: string | null }) {
-  const name = (list: { id: string; name: string }[], id: string) => list.find((x) => x.id === id)?.name;
+  const name = (list: { id: string; name: string }[] | undefined, id: string) => list?.find((x) => x.id === id)?.name;
   const rows: [string, string][] = [
     ['First Name', form.first_name],
     ['Last Name', form.last_name],
@@ -796,10 +1232,17 @@ function FormDetails({ form, options, display, aadhaar }: { form: Form; options:
     ['Mobile Number', form.mobile_number],
     ['Religion', form.religion],
     ['Caste', display?.caste ?? name(options.castes, form.caste_id) ?? '—'],
-    ['Course Centre', display?.course_centre ?? name(options.regions, form.region_id) ?? '—'],
-    ['Technology / 3rd module', display?.technology ?? options.tracks.find((t) => t.code === form.technology)?.name ?? '—'],
+    ...basicExtraRows(
+      form,
+      display?.district ?? name(options.districts, form.district_id) ?? '—',
+      display?.taluka ?? '—',
+      display,
+    ),
+    [FIELD_LABELS.region_id, display?.course_centre ?? name(options.regions, form.region_id) ?? '—'],
+    [FIELD_LABELS.centre_id, display?.centre ?? centreLabel(options, form.centre_id)],
+    ['Technology', display?.technology ?? options.tracks.find((t) => t.code === form.technology)?.name ?? '—'],
     ['Education Qualification', display?.education ?? name(options.educations, form.education_id) ?? '—'],
-    ['Current Address', form.current_address],
+    ...qualificationRows(form, options),
   ];
   return (
     <dl className="details">
@@ -814,32 +1257,14 @@ function FormDetails({ form, options, display, aadhaar }: { form: Form; options:
 }
 
 /*
- * Whom to contact about a submitted form: EDP_SUPPORT_EMAIL / EDP_SUPPORT_MOBILE in the API's .env (sent with the
- * options), so the office can change them without a new portal build. Neither set → the programme office, unnamed.
+ * Whom to contact about a submitted form: the message, email and mobile the EDP admins set on /manage/settings (sent
+ * with the options), {email} / {mobile} shown as links. No message → nothing.
  */
 function SupportContact({ support }: { support?: Options['support'] }) {
-  const email = support?.email;
-  const mobile = support?.mobile;
-  if (!email && !mobile)
-    return <Notice tone="info">If you have any query related to your registration, please contact the programme office.</Notice>;
+  if (!support?.message?.trim()) return null;
   return (
     <Notice tone="info">
-      If you have any query related to your registration, you can contact us on{' '}
-      {email ? (
-        <>
-          email ID <a href={`mailto:${email}`}>{email}</a>
-        </>
-      ) : null}
-      {email && mobile ? ' or ' : null}
-      {mobile ? (
-        <>
-          mobile number{' '}
-          <a href={`tel:${mobile.replace(/[^\d+]/g, '')}`} className="nowrap">
-            {mobile}
-          </a>
-        </>
-      ) : null}
-      .
+      <SupportMessage support={support} />
     </Notice>
   );
 }
@@ -848,6 +1273,7 @@ function SupportContact({ support }: { support?: Options['support'] }) {
 function SubmittedView({ app, options }: { app: Application; options: Options }) {
   const [error, setError] = useState('');
   const reg = app.registration;
+  const anyVerified = app.submitted_files.some((f) => f.verified);
 
   return (
     <>
@@ -888,7 +1314,7 @@ function SubmittedView({ app, options }: { app: Application; options: Options })
           <section className="card">
             <h3>Details</h3>
             <p className="hint" style={{ marginTop: -6 }}>
-              As currently recorded by the programme office (including any correction made by them).
+              As submitted with your registration.
             </p>
             <FormDetails form={app.form} options={options} display={reg.display} aadhaar={reg.aadhaar_masked} />
           </section>
@@ -901,7 +1327,7 @@ function SubmittedView({ app, options }: { app: Application; options: Options })
                     <th>Document</th>
                     <th>File</th>
                     <th>Uploaded</th>
-                    <th>Verification</th>
+                    {anyVerified ? <th>Verification</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -915,10 +1341,10 @@ function SubmittedView({ app, options }: { app: Application; options: Options })
                         >
                           {f.original_name}
                         </button>
-                        {app.barcodes[f.doc_type] ? <div className="mono hint">Barcode {app.barcodes[f.doc_type]}</div> : null}
                       </td>
                       <td className="nowrap">{fmtDate(f.uploaded_at, false)}</td>
-                      <td>{f.verified ? <span className="badge SUBMITTED">Verified</span> : <span className="badge VERIFIED">Pending</span>}</td>
+                      {/* Only a verified document is marked; nothing is shown while no verification has happened. */}
+                      {anyVerified ? <td>{f.verified ? <span className="badge SUBMITTED">Verified</span> : null}</td> : null}
                     </tr>
                   ))}
                 </tbody>

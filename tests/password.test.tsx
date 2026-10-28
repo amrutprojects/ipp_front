@@ -45,7 +45,10 @@ function mockApi(answers: Record<string, () => Response>) {
   return calls;
 }
 
+/* These tests are about the password flow: the caste eligibility step before the login form is confirmed already. */
+beforeEach(() => sessionStorage.setItem('edp.casteConfirmed', '1'));
 afterEach(() => {
+  sessionStorage.clear();
   vi.restoreAllMocks();
   forgetSignupPassword();
 });

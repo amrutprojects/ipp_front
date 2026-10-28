@@ -1,13 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { api, onUnauthorized, tokens, type Realm } from './api';
-import type { Account } from './types';
+import type { Account, Admin } from './types';
 
-interface Admin {
-  id: string;
-  name: string;
-  email: string;
-}
 interface SessionState<T> {
   user: T | null;
   loading: boolean;
@@ -78,5 +73,17 @@ export function RequireManage({ children }: { children: ReactNode }) {
   const { user, loading } = useManage();
   if (loading) return <div className="loading">Loading…</div>;
   if (!user) return <Navigate to="/manage/login" replace />;
+  return <>{children}</>;
+}
+
+/* Only an ADMIN of the tracking panel may change things (centres, follow-ups, users); a VIEWER only views and downloads. */
+export const useCanEdit = () => useManage().user?.role === 'ADMIN';
+
+/* A page only an ADMIN may open (Add / Edit center, Users): a signed-in VIEWER is sent to `viewerTo`. */
+export function RequireManageAdmin({ children, viewerTo }: { children: ReactNode; viewerTo: string }) {
+  const { user, loading } = useManage();
+  if (loading) return <div className="loading">Loading…</div>;
+  if (!user) return <Navigate to="/manage/login" replace />;
+  if (user.role !== 'ADMIN') return <Navigate to={viewerTo} replace />;
   return <>{children}</>;
 }

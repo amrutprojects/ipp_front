@@ -35,7 +35,7 @@ function mockApi() {
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
     calls.push({ method, url, body });
-    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'EDP Admin', email: 'edp.admin@example.com' } });
+    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'EDP Admin', email: 'edp.admin@example.com', role: 'ADMIN' } });
     if (url.endsWith('/manage/summary'))
       return json(200, {
         data: {
@@ -126,7 +126,7 @@ describe('Tracking panel follow-ups: review fixes', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       calls.push(url);
-      if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'EDP Admin', email: 'a@example.com' } });
+      if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'EDP Admin', email: 'a@example.com', role: 'ADMIN' } });
       if (url.endsWith('/manage/summary'))
         return json(200, { data: { total: 1, counts: {}, stages: [], follow_ups: { NONE: 0, PENDING: 0, CALLED: 1, SECOND_CALL: 0, FORM_FILLED: 0 } } });
       if (url.includes('/manage/applicants?')) return json(200, opts.list(Number(new URL(url, 'http://x').searchParams.get('page'))));

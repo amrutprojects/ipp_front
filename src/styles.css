@@ -1166,3 +1166,348 @@ table.tbl {
   color: var(--muted);
   padding: 0 16px 24px;
 }
+
+/* Yes / No radio groups and check boxes in the form */
+fieldset.radios {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+fieldset.radios legend {
+  padding: 0;
+  margin-bottom: 5px;
+}
+.radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  min-height: 42px;
+  align-items: center;
+}
+.radio,
+.check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.radio input,
+.check-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--brand-600);
+}
+.radio input:focus-visible,
+.check-row input:focus-visible {
+  outline: 3px solid var(--brand-100);
+  outline-offset: 2px;
+}
+.form-section {
+  margin: 10px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 16px;
+}
+.inp:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* The tracking panel's sections (Applicants / Center Master) */
+.manage-nav {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.manage-nav a {
+  padding: 9px 14px;
+  border-bottom: 3px solid transparent;
+  color: var(--text-2);
+  font-weight: 650;
+  text-decoration: none;
+}
+.manage-nav a:hover {
+  color: var(--brand-700);
+}
+.manage-nav a.active {
+  color: var(--brand-700);
+  border-bottom-color: var(--brand-600);
+}
+.badge.active {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.badge.inactive {
+  background: var(--red-bg);
+  color: var(--red);
+}
+/* Tracking panel roles: Admin (full access), Viewer (view and download only). */
+.badge.role-ADMIN {
+  background: var(--brand-100);
+  color: var(--brand-700);
+}
+.badge.role-VIEWER,
+.badge.view-only {
+  background: #e8eef7;
+  color: #2f4f7a;
+}
+.check-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px 16px;
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 10px 12px;
+  margin: 0;
+}
+/* Login: the eligible castes, confirmed before the login form opens. */
+.eligibility-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.eligibility-head h1 {
+  margin-bottom: 6px;
+}
+.eligibility-count {
+  background: var(--brand-050);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-100);
+}
+.caste-panel {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.caste-search {
+  margin-bottom: 10px;
+}
+.caste-chips {
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 232px;
+  overflow-y: auto;
+}
+.caste-chip {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.eligibility-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+.eligibility-confirm.on {
+  border-color: var(--brand-600);
+  background: var(--brand-050);
+}
+.eligibility-confirm input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  flex: none;
+  accent-color: var(--brand-600);
+}
+.eligibility-confirm input:focus-visible {
+  outline: 3px solid var(--brand-100);
+  outline-offset: 2px;
+}
+.eligibility-ok {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: var(--green-bg);
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* The message takes the room beside the tick, so the tick never sits alone on a narrow screen. */
+.eligibility-ok > span:nth-child(2) {
+  flex: 1 1 180px;
+}
+.eligibility-ok .link-btn {
+  font-size: 13px;
+  font-weight: 600;
+}
+/* Tracking panel, a student's documents: View and Download side by side, same width, right-aligned. */
+.doc-actions-cell {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+}
+.doc-actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.doc-actions .btn {
+  min-width: 104px;
+  gap: 6px;
+}
+/* On a phone each document is a stacked block: name, file, date, then View and Download side by side. */
+@media (max-width: 640px) {
+  .docs-tbl thead {
+    display: none;
+  }
+  .docs-tbl,
+  .docs-tbl tbody,
+  .docs-tbl tr,
+  .docs-tbl td {
+    display: block;
+    width: 100%;
+  }
+  .docs-tbl tr {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .docs-tbl td {
+    border: 0;
+    padding: 2px 12px;
+  }
+  .docs-tbl td:first-child {
+    font-weight: 650;
+  }
+  .docs-tbl .doc-actions-cell {
+    text-align: left;
+    padding-top: 8px;
+  }
+  .docs-tbl .doc-actions {
+    display: flex;
+  }
+  .docs-tbl .doc-actions .btn {
+    flex: 1;
+  }
+}
+.btn-icon {
+  flex: none;
+}
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+/* Step 3: one block per document, with a file area that takes a click, Enter / Space or a dropped file. */
+.doc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px 20px;
+  margin-top: 8px;
+}
+.doc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  padding: 14px 12px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.dropzone:hover,
+.dropzone.dragging {
+  border-color: var(--brand-500);
+  background: var(--brand-050);
+}
+.dropzone:focus-visible {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-100);
+}
+.dropzone:disabled {
+  cursor: progress;
+  opacity: 0.75;
+}
+.dropzone.has-file {
+  border-style: solid;
+  border-color: var(--green);
+  background: var(--green-bg);
+}
+.dropzone[aria-invalid='true'] {
+  border-color: var(--red);
+}
+.dz-file {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.dz-prompt {
+  color: var(--brand-700);
+  font-size: 13px;
+  font-weight: 600;
+}
+.dz-types {
+  color: var(--muted);
+  font-size: 12px;
+}
+.doc-actions {
+  gap: 6px;
+}
+.doc-actions .muted {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.downloads {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.downloads h3 {
+  margin: 0 0 8px;
+}
+.download-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: baseline;
+}
+.download-row a {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
