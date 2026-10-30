@@ -72,11 +72,13 @@ export function serverMessage(T: Pick, f: Failure): string {
     case 'OTP_NOT_PENDING':
       return T('या खात्यासाठी कोणताही OTP प्रलंबित नाही. कृपया नवीन OTP मागवा.', message);
     case 'OTP_RESEND_TOO_SOON':
-      return T('नवीन OTP मागवण्यापूर्वी थोडा वेळ थांबा. आधी पाठवलेल्या OTP साठी ईमेल तपासा.', message);
+      return T('नवीन OTP मागवण्यापूर्वी थोडा वेळ थांबा. आधी पाठवलेल्या OTP साठी SMS तपासा.', message);
     case 'EMAIL_NOT_VERIFIED':
-      return T('आपला ईमेल अद्याप पडताळलेला नाही. ईमेलवर पाठवलेला OTP टाका.', message);
+      return T('आपला मोबाईल क्रमांक अद्याप पडताळलेला नाही. SMS ने पाठवलेला OTP टाका.', message);
     case 'EMAIL_UNAVAILABLE':
       return T('सध्या ईमेल पाठवता आला नाही. काही मिनिटांनी पुन्हा प्रयत्न करा.', message);
+    case 'SMS_UNAVAILABLE':
+      return T('सध्या OTP SMS पाठवता आला नाही. काही मिनिटांनी पुन्हा प्रयत्न करा.', message);
     case 'SIGNUP_PASSWORD_MISMATCH':
       return T(
         'हा खाते तयार करताना निवडलेला पासवर्ड नाही. तोच पासवर्ड टाका किंवा खाते पुन्हा तयार करा.',
@@ -115,7 +117,7 @@ export function serverMessage(T: Pick, f: Failure): string {
   if (status === 403) return T('हे खाते बंद केले आहे. कृपया कार्यक्रम कार्यालयाशी संपर्क साधा.', message);
   if (status === 404) return T('या ईमेलचे खाते सापडले नाही. कृपया खाते तयार करा.', message);
   if (status === 409 && /already verified/i.test(message)) return T('हा ईमेल आधीच पडताळलेला आहे. कृपया लॉगिन करा.', message);
-  if (status === 409 && /just registered/i.test(message)) return T('हा ईमेल नुकताच नोंदवला गेला आहे. त्यावर पाठवलेला OTP टाका.', message);
+  if (status === 409 && /just registered/i.test(message)) return T('हा ईमेल नुकताच नोंदवला गेला आहे. आपल्या मोबाईलवर पाठवलेला OTP टाका.', message);
   if (status === 409 && /already exists/i.test(message)) return T('या ईमेलचे खाते आधीच अस्तित्वात आहे. कृपया लॉगिन करा.', message);
   return message;
 }

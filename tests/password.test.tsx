@@ -24,7 +24,7 @@ function renderAt(path: string) {
       <SessionProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/verify" element={<h1>Verify your email</h1>} />
+          <Route path="/verify" element={<h1>Verify your mobile number</h1>} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Routes>
@@ -109,7 +109,7 @@ describe('Forgot password', () => {
     await userEvent.type(screen.getByLabelText(/^Email ID/), 'Kavya@Example.com');
     await userEvent.type(screen.getByLabelText(/^Password/), 'abcdefg1');
     await userEvent.click(screen.getByRole('button', { name: 'Login' }));
-    expect(await screen.findByRole('heading', { name: 'Verify your email' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Verify your mobile number' })).toBeInTheDocument();
     expect(signupPasswordFor('kavya@example.com')).toBe('abcdefg1');
     expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain('abcdefg1');
   });

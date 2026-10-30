@@ -65,7 +65,7 @@ export default function RegisterPage() {
       /* The OTP page sends the password with the OTP (kept in memory only), and starts from this timing. */
       rememberSignupPassword(data.email, v.password);
       navigate(`/verify?email=${encodeURIComponent(data.email)}`, {
-        state: { expiresIn: data.otp_expires_in, resendAfter: data.resend_after, receivedAt: Date.now() },
+        state: { expiresIn: data.otp_expires_in, resendAfter: data.resend_after, receivedAt: Date.now(), mobileMasked: data.mobile_masked },
       });
     } catch (err) {
       if (err instanceof ApiError && err.details.length) setServerFields(err.fields());
@@ -92,6 +92,7 @@ export default function RegisterPage() {
         autoComplete={opts.autoComplete}
         autoFocus={opts.autoFocus}
         inputMode={k === 'mobile_number' ? 'tel' : undefined}
+        pattern={k === 'mobile_number' ? '[0-9+ ()-]*' : undefined}
         maxLength={k === 'email' ? 254 : k === 'mobile_number' ? 15 : 100}
       />
     </Field>
@@ -137,11 +138,11 @@ export default function RegisterPage() {
         <div className="grid mt16">
           {input('email', T('ईमेल आयडी', 'Email ID'), 'email', {
             autoComplete: 'email',
-            hint: T('या ईमेलवर OTP पाठवला जाईल.', 'An OTP will be sent to this email address.'),
+            hint: T('हा ईमेल आयडी लॉगिनसाठी वापरला जाईल.', 'This email ID is used to log in.'),
           })}
           {input('mobile_number', T('मोबाईल क्रमांक', 'Mobile Number'), 'tel', {
             autoComplete: 'tel',
-            hint: T('१० अंकी मोबाईल क्रमांक', '10-digit mobile number'),
+            hint: T('या मोबाईल क्रमांकावर OTP SMS ने पाठवला जाईल. १० अंकी क्रमांक टाका.', 'An OTP will be sent by SMS to this number. Enter a 10-digit number.'),
           })}
           <Field
             id="reg-password"

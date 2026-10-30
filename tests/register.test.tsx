@@ -61,7 +61,7 @@ describe('Create account', () => {
 
   it("sends the account and goes to the OTP page, which counts down the server's timing for the OTP and for Resend", async () => {
     /* A re-sign-up 3 minutes after the first: the OTP sent then has 2 minutes left, and Resend opens with its expiry. */
-    const timing = { email: 'kavya@example.com', otp_expires_in: 120, resend_after: 120 };
+    const timing = { email: 'kavya@example.com', mobile_masked: '+91XXXXXX2345', otp_expires_in: 120, resend_after: 120 };
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const u = String(url);
       if (u.endsWith('/auth/register')) return json(201, { data: timing });
@@ -78,8 +78,8 @@ describe('Create account', () => {
     await userEvent.type(screen.getByLabelText(/Re-enter Password/), 'abcdefg1');
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
 
-    expect(await screen.findByRole('heading', { name: 'Verify your email' })).toBeInTheDocument();
-    expect(screen.getByText(/We have sent a 6-digit OTP to kavya@example.com/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Verify your mobile number' })).toBeInTheDocument();
+    expect(screen.getByText(/We have sent a 6-digit OTP by SMS to \+91XXXXXX2345/)).toBeInTheDocument();
     expect(screen.getByText(/OTP expires in/)).toBeInTheDocument();
     expect(screen.getByText(/^(2:00|1:5\d)$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Resend OTP in (2:00|1:5\d)$/ })).toBeDisabled();
@@ -225,9 +225,9 @@ describe('OTP timing', () => {
     /* The OTP is still valid (4:40 left) and the resend wait is over: both actions are available. */
     expect(await screen.findByText(/^4:[34]\d$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Verify/ })).toBeEnabled();
-    expect(screen.getByText(/Email not received\? Check the spam folder/)).toBeInTheDocument();
+    expect(screen.getByText(/SMS not received\? Check your mobile network/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Resend OTP' }));
-    expect(await screen.findByText('A new OTP has been sent to kavya@example.com.')).toBeInTheDocument();
+    expect(await screen.findByText('A new OTP has been sent by SMS to your mobile number.')).toBeInTheDocument();
     expect(fetchSpy.mock.calls.some(([u]) => String(u).endsWith('/auth/resend-otp'))).toBe(true);
     /* Both restart from the new OTP's 5 minutes (not the old 4:40). */
     expect(screen.getByText(/^(5:00|4:5\d)$/)).toBeInTheDocument();
@@ -255,7 +255,7 @@ describe('OTP timing', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(EXPIRED);
       expect(fetchSpy.mock.calls.some(([u]) => String(u).endsWith('/auth/verify-otp'))).toBe(false);
       await user.click(screen.getByRole('button', { name: 'Resend OTP' }));
-      expect(await screen.findByText('A new OTP has been sent to kavya@example.com.')).toBeInTheDocument();
+      expect(await screen.findByText('A new OTP has been sent by SMS to your mobile number.')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^Resend OTP in (5:00|4:5\d)$/ })).toBeDisabled();
     } finally {
       vi.useRealTimers();

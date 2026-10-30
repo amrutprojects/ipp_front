@@ -16,6 +16,8 @@ export interface Session {
 
 export interface OtpTiming {
   email: string;
+  /* The mobile number the OTP was texted to, masked (+91XXXXXX1234). */
+  mobile_masked?: string | null;
   otp_expires_in: number;
   resend_after: number;
 }

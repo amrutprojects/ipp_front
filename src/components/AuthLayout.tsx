@@ -58,13 +58,13 @@ export function AuthLayout({ children, wide, panel = 'student' }: { children: Re
                   'Account created, OTP verified, steps 1 and 2 filled, form submitted — see how far each student got and follow up with those who stopped.',
                 )
               : T(
-                  'उद्योजकता विकास कार्यक्रमासाठी ऑनलाइन नोंदणी: ईमेल OTP ने खाते पडताळा, तीन टप्प्यांत फॉर्म भरा, कागदपत्रे अपलोड करा आणि आपल्या अर्जाची माहिती कधीही पहा.',
-                  'Online registration for the Entrepreneurship Development Program: verify your account with an email OTP, fill in the form in three steps, upload your documents and see your application any time.',
+                  'उद्योजकता विकास कार्यक्रमासाठी ऑनलाइन नोंदणी: मोबाईल OTP ने खाते पडताळा, तीन टप्प्यांत फॉर्म भरा, कागदपत्रे अपलोड करा आणि आपल्या अर्जाची माहिती कधीही पहा.',
+                  'Online registration for the Entrepreneurship Development Program: verify your account with a mobile OTP, fill in the form in three steps, upload your documents and see your application any time.',
                 )}
           </p>
           <div className="mode-tags">
             <span className="mode-tag mode-off">{T('३ टप्प्यांचा ऑनलाइन फॉर्म', '3-STEP ONLINE FORM')}</span>
-            <span className="mode-tag mode-on">{T('ईमेल OTP पडताळणी', 'EMAIL OTP VERIFIED')}</span>
+            <span className="mode-tag mode-on">{T('मोबाईल OTP पडताळणी', 'MOBILE OTP VERIFIED')}</span>
           </div>
         </div>
 

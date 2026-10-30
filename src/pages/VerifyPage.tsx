@@ -42,7 +42,7 @@ export default function VerifyPage() {
    * it has expired). Straight after the sign-up that is the server's timing; otherwise (a reload, a Back, a login) the
    * page asks the server (otp-status), as it cannot know when the OTP was sent.
    */
-  const state = (location.state ?? {}) as { expiresIn?: number; resendAfter?: number; receivedAt?: number; notice?: Failure };
+  const state = (location.state ?? {}) as { expiresIn?: number; resendAfter?: number; receivedAt?: number; notice?: Failure; mobileMasked?: string | null };
   const [fresh] = useState(() => typeof state.receivedAt === 'number' && Date.now() - state.receivedAt < 10_000);
   const base = state.receivedAt ?? Date.now();
   const [deadline, setDeadline] = useState(() => base + (state.expiresIn ?? 300) * 1000);
@@ -51,6 +51,8 @@ export default function VerifyPage() {
   const [synced, setSynced] = useState(fresh);
   const left = useSecondsLeft(deadline);
   const resendLeft = useSecondsLeft(resendAt);
+  /* Where the OTP went (masked); from the sign-up, else from otp-status. */
+  const [mobile, setMobile] = useState(state.mobileMasked ?? '');
   const [otp, setOtp] = useState('');
   /* The password chosen at sign-up goes with the OTP; asked for when this page does not have it (e.g. after a reload). */
   const [password, setPassword] = useState(() => signupPasswordFor(email) ?? '');
@@ -60,7 +62,8 @@ export default function VerifyPage() {
   const [busy, setBusy] = useState(false);
   const [resending, setResending] = useState(false);
 
-  const applyTiming = useCallback((t: Pick<OtpTiming, 'otp_expires_in' | 'resend_after'>) => {
+  const applyTiming = useCallback((t: Pick<OtpTiming, 'otp_expires_in' | 'resend_after' | 'mobile_masked'>) => {
+    if (t?.mobile_masked) setMobile(t.mobile_masked);
     if (typeof t?.otp_expires_in !== 'number' || typeof t.resend_after !== 'number') return;
     setDeadline(Date.now() + t.otp_expires_in * 1000);
     setResendAt(Date.now() + t.resend_after * 1000);
@@ -92,8 +95,8 @@ export default function VerifyPage() {
     info.kind === 'notice'
       ? serverMessage(T, info.failure)
       : info.kind === 'resent'
-        ? T(`${email} वर नवीन OTP पाठवला आहे.`, `A new OTP has been sent to ${email}.`)
-        : T(`${email} वर ६ अंकी OTP पाठवला आहे.`, `We have sent a 6-digit OTP to ${email}.`);
+        ? T(`${mobile || 'आपल्या मोबाईल क्रमांकावर'} नवीन OTP SMS ने पाठवला आहे.`, `A new OTP has been sent by SMS to ${mobile || 'your mobile number'}.`)
+        : T(`${mobile || 'आपल्या मोबाईल क्रमांकावर'} ६ अंकी OTP SMS ने पाठवला आहे.`, `We have sent a 6-digit OTP by SMS to ${mobile || 'your mobile number'}.`);
   const problemText = !problem
     ? ''
     : problem.kind === 'format'
@@ -153,17 +156,17 @@ export default function VerifyPage() {
 
   return (
     <AuthLayout>
-      <h1>{T('आपला ईमेल पडताळा', 'Verify your email')}</h1>
+      <h1>{T('आपला मोबाईल क्रमांक पडताळा', 'Verify your mobile number')}</h1>
       <p className="sub">
         {T(
-          'ENTREPRENEURSHIP DEVELOPMENT PROGRAM कडून आलेल्या ईमेलमधील OTP टाका. पडताळणीनंतर आपले खाते तयार होईल.',
-          'Enter the OTP from the email sent by ENTREPRENEURSHIP DEVELOPMENT PROGRAM. Your account is created once it is verified.',
+          'आपल्या मोबाईलवर SMS ने आलेला OTP टाका. पडताळणीनंतर आपले खाते तयार होईल.',
+          'Enter the OTP sent by SMS to your mobile. Your account is created once it is verified.',
         )}
       </p>
       <form onSubmit={verify} noValidate>
         <Notice tone="info">{infoText}</Notice>
         {problem ? <Notice tone="error">{problemText}</Notice> : null}
-        <Field id="otp" label="OTP" hint={T('ईमेलमधील ६ अंकी OTP टाका.', 'Enter the 6-digit code from the email.')}>
+        <Field id="otp" label="OTP" hint={T('SMS मधील ६ अंकी OTP टाका.', 'Enter the 6-digit code from the SMS.')}>
           <input
             id="otp"
             className="inp otp"
@@ -215,23 +218,23 @@ export default function VerifyPage() {
           <p className="hint center mt8">
             {resendAtExpiry
               ? T(
-                  'ईमेल मिळाला नाही? स्पॅम फोल्डर तपासा. या OTP ची मुदत संपल्यानंतर नवीन OTP मागवता येईल.',
-                  'Email not received? Check the spam folder. A new OTP can be requested once this one expires.',
+                  'SMS मिळाला नाही? नेटवर्क तपासा. या OTP ची मुदत संपल्यानंतर नवीन OTP मागवता येईल.',
+                  'SMS not received? Check your mobile network. A new OTP can be requested once this one expires.',
                 )
-              : T('ईमेल मिळाला नाही? स्पॅम फोल्डर तपासा.', 'Email not received? Check the spam folder.')}
+              : T('SMS मिळाला नाही? नेटवर्क तपासा.', 'SMS not received? Check your mobile network.')}
           </p>
         ) : (
           <p className="hint center mt8">
             {T(
-              'ईमेल मिळाला नाही? स्पॅम फोल्डर तपासा किंवा OTP पुन्हा पाठवा (आधीचा OTP मग चालणार नाही).',
-              'Email not received? Check the spam folder, or resend the OTP (the earlier one then stops working).',
+              'SMS मिळाला नाही? नेटवर्क तपासा किंवा OTP पुन्हा पाठवा (आधीचा OTP मग चालणार नाही).',
+              'SMS not received? Check your mobile network, or resend the OTP (the earlier one then stops working).',
             )}
           </p>
         )}
       </form>
       <div className="sep" />
       <p className="center fs13 muted" style={{ margin: 0 }}>
-        {T('ईमेल चुकीचा आहे?', 'Wrong email?')} <Link to="/register">{T('खाते पुन्हा तयार करा', 'Create the account again')}</Link>
+        {T('मोबाईल क्रमांक चुकीचा आहे?', 'Wrong mobile number?')} <Link to="/register">{T('खाते पुन्हा तयार करा', 'Create the account again')}</Link>
       </p>
     </AuthLayout>
   );

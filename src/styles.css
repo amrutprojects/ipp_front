@@ -1504,3 +1504,12 @@ a.btn {
   padding-left: 6px;
   padding-right: 6px;
 }
+
+/* OTP box on narrow phones: tighter digit spacing so six digits never overflow. */
+@media (max-width: 380px) {
+  .otp,
+  .auth-box .inp.otp {
+    letter-spacing: 6px;
+    font-size: 22px;
+  }
+}
