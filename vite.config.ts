@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     base: '/',
     server: {
-      port: 5175,
+      port: 5176,
       strictPort: true,
       /* Dev only: API calls go to the backend through this server, so the browser stays same-origin. */
       proxy: { '/api': { target: env.VITE_API_PROXY_TARGET || 'http://localhost:5001', changeOrigin: true } },

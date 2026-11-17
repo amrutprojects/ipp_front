@@ -368,3 +368,53 @@ export function supportIssues(f: SupportForm): Record<string, string> {
   else if (!mobile && message.includes('{mobile}')) e.mobile = 'Mobile is required because the message uses {mobile}';
   return e;
 }
+
+/* Welcome message (tracking panel Settings): the same rules as PUT /manage/settings/welcome. */
+export interface WelcomeForm {
+  enabled: boolean;
+  title: string;
+  message: string;
+  button_label: string;
+}
+export function welcomeIssues(f: WelcomeForm): Record<string, string> {
+  const e: Record<string, string> = {};
+  const title = f.title.trim();
+  const message = f.message.trim();
+  if (!title) e.title = 'Title is required';
+  else if (title.length < 3 || title.length > 120) e.title = 'Title must be 3–120 characters';
+  if (!message) e.message = 'Message is required';
+  else if (message.length < 10 || message.length > 1000) e.message = 'Message must be 10–1000 characters';
+  if (f.button_label.trim().length > 60) e.button_label = 'Button label must be at most 60 characters';
+  return e;
+}
+
+/* Help button (tracking panel Settings): the same rules as PUT /manage/settings/help. */
+export interface HelpFormField {
+  label: string;
+  value: string;
+}
+export interface HelpForm {
+  enabled: boolean;
+  title: string;
+  intro: string;
+  fields: HelpFormField[];
+}
+/* Errors are keyed as the API names them (fields.0.label), so a server 422 highlights the same boxes. */
+export function helpIssues(f: HelpForm): Record<string, string> {
+  const e: Record<string, string> = {};
+  const title = f.title.trim();
+  if (!title) e.title = 'Title is required';
+  else if (title.length < 2 || title.length > 120) e.title = 'Title must be 2–120 characters';
+  if (f.intro.trim().length > 300) e.intro = 'Intro must be at most 300 characters';
+  f.fields.forEach((row, i) => {
+    const label = row.label.trim();
+    const value = row.value.trim();
+    if (label.length > 60) e[`fields.${i}.label`] = 'Field name must be at most 60 characters';
+    else if (value && !label) e[`fields.${i}.label`] = 'Field name is required when a value is given';
+    if (value.length > 200) e[`fields.${i}.value`] = 'Value must be at most 200 characters';
+    else if (label && !value) e[`fields.${i}.value`] = 'Value is required when a field name is given';
+  });
+  if (f.enabled && !f.fields.some((row) => row.label.trim() && row.value.trim()))
+    e.fields = 'Add at least one contact detail to show in the Help panel';
+  return e;
+}

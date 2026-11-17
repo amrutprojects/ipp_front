@@ -12,10 +12,16 @@ Student registration portal of the EDP by Sumago Infotech Pvt. Ltd., plus its tr
 | `/reset-password?token=…` | Student | The emailed link: new password ×2, then back to the login. Every other session of the account is signed out. |
 | `/application` | Student | Step 1 of 3 – Basic Details, Step 2 of 3 – Main Form, Step 3 of 3 – Upload Documents. Saved as typed, so the student resumes where they stopped. After submission (final: no edit or resubmission): the submitted registration, read-only. |
 | `/manage/login`, `/manage` | EDP team | Tracking panel: every account with its stage (OTP pending, verified, step 1, step 2, submitted), with follow-ups (status + note) per student; `/manage/applicants/:id` shows one student's full form and documents. |
+| `/manage/settings` | EDP team | What the portal says, edited without a release: the **support contact** line shown after a submission, the **welcome message** (the congratulations popup) and the **Help button** (a heading and up to four name / value lines). An admin saves them, a viewer reads them. |
 
 A submitted form stays in the EDP system (registration ID `EDP-000001`, …); the EDP team sees it in the tracking
 panel (`/manage`, View on a student). Dropdowns list only active master values. After submitting, the student sees whom to
 contact with a query (email ID and mobile number from the API settings below).
+
+Students are congratulated as soon as the OTP is verified and the account exists, and every student screen has a **Help**
+button in its bottom-right corner. Both are written on `/manage/settings` (sent to the portal with `GET /edp/options`), so
+the wording and the contact details change without a build; until an admin saves them the portal uses its own text and
+`EDP_SUPPORT_EMAIL` / `EDP_SUPPORT_MOBILE`.
 
 ## Run locally
 
@@ -38,8 +44,8 @@ API (`.env` of amrut-kalash-api, see its `.env.example`):
   `smtp.gmail.com`, `465`, `SMTP_SECURE=true`, an app password.
 - `EDP_OTP_TTL_SECONDS` (default 300 = 5 minutes), `EDP_OTP_RESEND_SECONDS` (default: the OTP lifetime, i.e. a new OTP
   once the current one has expired), `EDP_RATE_LIMIT_MAX`, `EDP_SESSION_HOURS`, optional `EDP_JWT_SECRET`.
-- `EDP_SUPPORT_EMAIL`, `EDP_SUPPORT_MOBILE`: the contact shown after submitting; change them and restart the API (no
-  portal build needed).
+- `EDP_SUPPORT_EMAIL`, `EDP_SUPPORT_MOBILE`: the contact shown after submitting and in the Help button, until an admin
+  sets them on `/manage/settings`; change them and restart the API (no portal build needed).
 - `EDP_PORTAL_URL`: the portal address used in the password reset link (default `https://edp.sumago.ai` in production,
   `http://localhost:5175` otherwise).
 - `EDP_ADMIN_EMAIL`, `EDP_ADMIN_PASSWORD`: tracking-panel sign-in created by `npm run seed` (production).

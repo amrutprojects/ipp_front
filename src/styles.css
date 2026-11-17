@@ -718,6 +718,8 @@ table.tbl {
   max-height: 90vh;
   overflow: auto;
   padding: 22px;
+  /* The ✕ a dialog may carry (Modal closeLabel) is placed against this box. */
+  position: relative;
 }
 .modal h3 {
   margin-top: 0;
@@ -1511,5 +1513,193 @@ a.btn {
   .auth-box .inp.otp {
     letter-spacing: 6px;
     font-size: 22px;
+  }
+}
+
+/* The ✕ that closes a dialog (Modal closeLabel), in its top-right corner. */
+.modal-x {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 0;
+  border-radius: 6px;
+}
+.modal-x:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* The congratulations dialog, shown once the account is created (the wording comes from the tracking panel). */
+/* Its heading is centred over the tick and the message; the ✕ sits clear of it. */
+.modal:has(.welcome) h3 {
+  text-align: center;
+  padding: 0 30px;
+}
+.welcome {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.welcome-tick {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: var(--green-bg);
+  color: var(--green);
+}
+.welcome p {
+  margin: 0;
+  color: var(--text-2);
+  /* The admins' line breaks are kept. */
+  white-space: pre-line;
+}
+.welcome + .actions {
+  justify-content: center;
+}
+
+/*
+ * The Help button, in the bottom-right corner of every portal screen, and the panel it opens above itself. Fixed, over
+ * the page but under a dialog's backdrop (z-index 20), so a congratulations popup is never drawn behind it.
+ */
+.help-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 15;
+  display: grid;
+  /* The panel hangs from the button's right edge, so it never runs off the screen. */
+  justify-items: end;
+  gap: 10px;
+}
+.help-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--brand-600);
+  background: var(--brand-600);
+  color: #fff;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font: inherit;
+  font-weight: 650;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.help-btn:hover {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+}
+.help-panel {
+  width: min(320px, calc(100vw - 36px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.help-panel-top {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.help-panel-top h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--maroon);
+}
+.help-close {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  line-height: 0;
+}
+.help-close:hover {
+  color: var(--text);
+}
+.help-intro {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+/* One line per detail: its name above, its value (a mailto: or tel: link) below. */
+.help-list {
+  margin: 12px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.help-list dt {
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+}
+.help-list dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* How a portal screen will look, shown beside the boxes that set it (tracking panel Settings). */
+.setting-preview {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 14px 16px;
+  max-width: 420px;
+}
+.setting-preview b {
+  color: var(--maroon);
+}
+.setting-preview p {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: var(--text-2);
+  white-space: pre-line;
+}
+.setting-preview .btn {
+  margin-top: 12px;
+  pointer-events: none;
+}
+.setting-preview .help-list {
+  margin-top: 12px;
+}
+/* "Show this to students": the content stays saved, it just stops being shown. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand-600);
+}
+
+/* Phones: the Help button sits clear of the page's own footer and never covers the form. */
+@media (max-width: 640px) {
+  .help-fab {
+    right: 12px;
+    bottom: 12px;
+  }
+  .help-btn {
+    padding: 8px 13px;
+    font-size: 13px;
   }
 }

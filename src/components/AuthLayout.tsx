@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useLang } from '../i18n';
+import { HelpButton } from './HelpButton';
 import { BrandMark, ORGANISATION, PROGRAM, useOptions } from './ui';
 
 /*
@@ -111,6 +112,9 @@ export function AuthLayout({ children, wide, panel = 'student' }: { children: Re
           © {new Date().getFullYear()} {PROGRAM} · {ORGANISATION}
         </div>
       </aside>
+
+      {/* Whom to contact, on every screen a student sees; set in the tracking panel, which does not need it itself. */}
+      {panel === 'student' ? <HelpButton /> : null}
     </div>
   );
 }

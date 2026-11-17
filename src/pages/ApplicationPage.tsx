@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { api, ApiError, openFile } from '../api';
+import { HelpButton } from '../components/HelpButton';
 import { SupportMessage } from '../components/SupportMessage';
+import { WelcomeDialog } from '../components/WelcomeDialog';
 import { ddmmyyyy, DocumentsReady, Field, fmtDate, Footer, Header, Modal, Notice, useOptions, useRemoteList } from '../components/ui';
 import { useStudent } from '../session';
 import {
@@ -16,6 +18,7 @@ import {
   type TechnologyOption,
 } from '../types';
 import { checkFields, FIELD_LABELS, fileIssue, fileRule, isCgpa, isDisabled, localToday } from '../validation';
+import { settleWelcome, welcomeOwed } from '../welcome';
 
 const STEPS = ['Basic Details', 'Main Form', 'Upload Documents'] as const;
 const STEP_FIELDS: Record<number, readonly FormField[]> = { 1: BASIC_FIELDS, 2: MAIN_FIELDS };
@@ -76,6 +79,15 @@ export default function ApplicationPage() {
   const [app, setApp] = useState<Application | null>(null);
   const [loadError, setLoadError] = useState('');
   const [flash, setFlash] = useState('');
+  /*
+   * Arrived straight from /verify: congratulate the student on the account just created. Read on every mount, so a
+   * remount while the dialog is open keeps it open; closing it settles the marker, so it does not come back.
+   */
+  const [showWelcome, setShowWelcome] = useState(welcomeOwed);
+  const closeWelcome = useCallback(() => {
+    settleWelcome();
+    setShowWelcome(false);
+  }, []);
 
   const reload = useCallback(async () => {
     const { data } = await api<Application>('/application', { realm: 'student' });
@@ -128,6 +140,9 @@ export default function ApplicationPage() {
         <DocumentsReady />
       </main>
       <Footer />
+      {/* Waits for the options, so the dialog opens with the admins' wording rather than the portal's and then changing. */}
+      {showWelcome && options ? <WelcomeDialog welcome={options.welcome} onClose={closeWelcome} /> : null}
+      <HelpButton />
     </>
   );
 }

@@ -224,6 +224,7 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
 /*
  * A dialog: focus moves into it when it opens (to the element marked data-autofocus, else the dialog) and back where it
  * was when it closes; Tab stays inside it. `alert` = a yes/no question (role alertdialog); `wide` = a large preview.
+ * `closeLabel` adds a ✕ in the corner that closes it, named by the caller (so each page names it in its own language).
  */
 export function Modal({
   title,
@@ -231,12 +232,14 @@ export function Modal({
   onClose,
   alert,
   wide,
+  closeLabel,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   alert?: boolean;
   wide?: boolean;
+  closeLabel?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -298,6 +301,13 @@ export function Modal({
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
+        {closeLabel ? (
+          <button type="button" className="modal-x" onClick={() => close.current()} aria-label={closeLabel} title={closeLabel}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        ) : null}
         <h3 id={titleId}>{title}</h3>
         {children}
       </div>

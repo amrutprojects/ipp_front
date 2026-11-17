@@ -6,6 +6,7 @@ import { Field, Notice, PasswordInput } from '../components/ui';
 import { serverMessage, toFailure, useLang, type Failure } from '../i18n';
 import { useStudent } from '../session';
 import { forgetSignupPassword, signupPasswordFor } from '../signup';
+import { oweWelcome } from '../welcome';
 import type { OtpTiming, Session } from '../types';
 
 /*
@@ -117,8 +118,10 @@ export default function VerifyPage() {
     try {
       const { data } = await api<Session>('/auth/verify-otp', { method: 'POST', body: { email, otp, password } });
       forgetSignupPassword();
+      /* The account exists from here on: the form page congratulates the student (not the router state — see welcome.ts). */
+      oweWelcome();
       signIn(data.token, data.account);
-      navigate('/application', { replace: true, state: { welcome: true } });
+      navigate('/application', { replace: true });
     } catch (err) {
       setProblem({ kind: 'server', failure: toFailure(err, 'VERIFY_FAILED') });
       /* Not the sign-up's password (mistyped, or the sign-up was made again): ask for it. */

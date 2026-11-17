@@ -70,16 +70,49 @@ export interface Options {
   qualification_classes: string[];
   /* Contact for queries, shown after submitting: set by the EDP admins on /manage/settings; message may hold {email} / {mobile}. */
   support?: { message: string; email: string | null; mobile: string | null };
+  /* The congratulations dialog shown once the account is created, and the Help button's details; both from /manage/settings. */
+  welcome?: WelcomeContent;
+  help?: HelpContent;
 }
 
-/* GET / PUT /manage/settings/support (the support contact line). */
-export interface SupportSettings {
+/* The congratulations dialog the portal shows once the mobile OTP is verified and the account exists. */
+export interface WelcomeContent {
+  enabled: boolean;
+  title: string;
   message: string;
-  email: string | null;
-  mobile: string | null;
+  /* Blank: the portal uses its own button text, in the language the student chose. */
+  button_label: string;
+}
+
+/* One line of the Help panel: a name and its value (an email address or a phone number becomes a link). */
+export interface HelpField {
+  label: string;
+  value: string;
+}
+/* The Help button in the portal's bottom-right corner. */
+export interface HelpContent {
+  enabled: boolean;
+  title: string;
+  intro: string;
+  fields: HelpField[];
+}
+/* How many name / value lines the Help panel holds (amrut-kalash-api EDP_HELP_FIELDS). */
+export const HELP_FIELDS = 4;
+
+/* When a settings row was last saved, and by whom; null = the API's defaults are in use. */
+export interface SavedMeta {
   updated_at: string | null;
   updated_by: string | null;
 }
+/* GET / PUT /manage/settings/support (the support contact line). */
+export interface SupportSettings extends SavedMeta {
+  message: string;
+  email: string | null;
+  mobile: string | null;
+}
+/* GET / PUT /manage/settings/welcome and /manage/settings/help. */
+export type WelcomeSettings = WelcomeContent & SavedMeta;
+export type HelpSettings = HelpContent & SavedMeta;
 
 export const BASIC_FIELDS = [
   'first_name',
