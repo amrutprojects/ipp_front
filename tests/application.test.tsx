@@ -32,8 +32,7 @@ const OPTIONS: Options = {
   cgpa_scales: [4, 5, 10],
   qualification_classes: ['Distinction', 'First Class', 'Higher Second Class', 'Second Class', 'Pass Class'],
 };
-/* The dependent lists: a district's talukas and a centre's technologies. */
-const TALUKAS: Record<string, { id: string; code: string; name: string }[]> = { dist1: [{ id: 'tal1', code: 'HVL', name: 'Haveli' }] };
+/* The dependent list: a centre's technologies (the taluka is typed, so it has no list). */
 const TECHNOLOGIES: Record<string, { code: string; name: string }[]> = {
   cen1: [{ code: 'T03', name: 'Web Design & Development' }],
   cen2: [{ code: 'T05', name: 'Cyber Security' }],
@@ -56,7 +55,7 @@ const FORM: Form = {
   permanent_address: 'Kothrud, Pune',
   landmark: '',
   district_id: 'dist1',
-  taluka_id: 'tal1',
+  taluka: 'Haveli',
   pin_code: '411038',
   alternate_mobile_number: '',
   alternate_email: '',
@@ -132,8 +131,6 @@ function mockApi(
     if (url.endsWith('/edp/me')) return json(200, { data: { id: 'a1', first_name: 'Kavya', last_name: 'Jadhav', email: 'kavya@example.com' } });
     if (url.endsWith('/edp/options')) return json(200, { data: opts.options ?? OPTIONS });
     if (url.endsWith('/edp/application') && method === 'GET') return json(200, { data: app });
-    const taluka = /\/edp\/districts\/([^/]+)\/talukas$/.exec(url);
-    if (taluka) return json(200, { data: TALUKAS[taluka[1]!] ?? [] });
     const tech = /\/edp\/centres\/([^/]+)\/technologies$/.exec(url);
     if (tech) {
       const answer = opts.technologies?.(tech[1]!);
@@ -557,17 +554,18 @@ describe('Step 1: new fields', () => {
     expect(screen.getByRole('alertdialog', { name: /Save Step 1 of 3/ })).toBeInTheDocument();
   });
 
-  it('loads the talukas of the chosen district and clears the taluka when the district changes', async () => {
-    mockApi(draft({ form: { ...FORM, district_id: '', taluka_id: '' } }));
+  it('takes the taluka as typed: optional, and never cleared by the district', async () => {
+    mockApi(draft({ form: { ...FORM, district_id: '', taluka: '' } }));
     renderPage();
-    const taluka = (await screen.findByLabelText(/^Taluka/)) as HTMLSelectElement;
-    expect(taluka).toBeDisabled();
+    const taluka = (await screen.findByLabelText(/^Taluka/)) as HTMLInputElement;
+    expect(taluka).toBeEnabled();
+    await userEvent.type(taluka, 'Haveli');
     await userEvent.selectOptions(screen.getByLabelText(/^District/), 'dist1');
-    await waitFor(() => expect(taluka).toBeEnabled());
-    await userEvent.selectOptions(taluka, 'tal1');
-    await userEvent.selectOptions(screen.getByLabelText(/^District/), '');
-    expect(taluka.value).toBe('');
-    expect(taluka).toBeDisabled();
+    expect(taluka.value).toBe('Haveli');
+    /* Blank is accepted: step 1 saves without a taluka. */
+    await userEvent.clear(taluka);
+    await userEvent.click(screen.getByRole('button', { name: 'Save & Next →' }));
+    expect(screen.getByRole('alertdialog', { name: 'Save Step 1 of 3 – Basic Details?' })).toBeInTheDocument();
   });
 });
 

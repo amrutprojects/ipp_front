@@ -131,7 +131,8 @@ export const BASIC_FIELDS = [
   'permanent_address',
   'landmark',
   'district_id',
-  'taluka_id',
+  /* Typed, not chosen from the Taluka master: optional free text. */
+  'taluka',
   'pin_code',
   'alternate_mobile_number',
   'alternate_email',

@@ -12,7 +12,6 @@ import {
   type DocumentType,
   type Form,
   type FormField,
-  type GeoRef,
   type Options,
   type Submitted,
   type TechnologyOption,
@@ -181,8 +180,6 @@ function FormWizard({
   const [sameAddress, setSameAddress] = useState(() => !!app.form.current_address && app.form.permanent_address === app.form.current_address);
   /* Why a saved choice was cleared (no longer offered). */
   const [technologyWarning, setTechnologyWarning] = useState('');
-  const [talukaWarning, setTalukaWarning] = useState('');
-  const talukas = useRemoteList<GeoRef>(form.district_id ? `/districts/${encodeURIComponent(form.district_id)}/talukas` : null);
   const technologies = useRemoteList<TechnologyOption>(
     form.centre_id ? `/centres/${encodeURIComponent(form.centre_id)}/technologies` : null,
   );
@@ -274,11 +271,6 @@ function FormWizard({
     setSameAddress(checked);
     if (checked) setField('permanent_address')(form.current_address ?? '');
   };
-  const onDistrict = (v: string) => {
-    setField('district_id')(v);
-    clearField('taluka_id');
-    setTalukaWarning('');
-  };
   const onDisability = (v: string) => {
     setField('disability_status')(v);
     if (v !== 'Yes') {
@@ -320,13 +312,6 @@ function FormWizard({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [technologies.status, technologies.path]);
-  useEffect(() => {
-    if (talukas.status === 'ok' && form.taluka_id && !talukas.items.some((t) => t.id === form.taluka_id)) {
-      setField('taluka_id')('');
-      setTalukaWarning('The taluka you chose earlier is no longer available. Please choose it again.');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [talukas.status, talukas.path]);
 
   const go = (s: number) => {
     setStep(s);
@@ -535,7 +520,6 @@ function FormWizard({
   const allCentres = options.centres ?? [];
   const technologyState = !form.centre_id ? 'none' : technologies.status;
   const noTechnologies = technologyState === 'ok' && technologies.items.length === 0;
-  const talukaState = !form.district_id ? 'none' : talukas.status;
 
   return (
     <>
@@ -637,27 +621,9 @@ function FormWizard({
                 'district_id',
                 (options.districts ?? []).map((d) => ({ value: d.id, label: d.name })),
                 'Select district',
-                { onChange: onDistrict },
               ),
             )}
-            {field(
-              'taluka_id',
-              select(
-                'taluka_id',
-                talukas.items.map((t) => ({ value: t.id, label: t.name })),
-                talukaState === 'none' ? 'Select a district first' : talukaState === 'loading' ? 'Loading talukas…' : 'Select taluka',
-                { disabled: talukaState !== 'ok' || !talukas.items.length },
-              ),
-              false,
-              talukaWarning ||
-                (talukaState === 'none'
-                  ? 'Choose your district to see its talukas.'
-                  : talukaState === 'error'
-                    ? 'Could not load the talukas. Check your connection and choose the district again.'
-                    : talukaState === 'ok' && !talukas.items.length
-                      ? 'No talukas are available for this district.'
-                      : undefined),
-            )}
+            {field('taluka', input('taluka', 'text', { maxLength: 100 }), false, undefined, false)}
             {field('aadhaar_number', input('aadhaar_number', 'text', { inputMode: 'numeric', maxLength: 14, placeholder: '12-digit Aadhaar number' }))}
             {field('mobile_number', input('mobile_number', 'tel', { maxLength: 15, autoComplete: 'tel' }))}
             {field(
@@ -891,7 +857,7 @@ function FormWizard({
             This is your application as it will be submitted. To change anything, close the preview and edit it; when everything
             is correct, choose Submit Application.
           </p>
-          <FormPreview form={form} options={options} app={app} talukas={talukas.items} technologies={technologies.items} />
+          <FormPreview form={form} options={options} app={app} technologies={technologies.items} />
           <div className="actions sticky">
             <span />
             <button className="btn" onClick={() => setPreview(false)} data-autofocus>
@@ -1089,13 +1055,11 @@ function FormPreview({
   form,
   options,
   app,
-  talukas,
   technologies,
 }: {
   form: Form;
   options: Options;
   app: Application;
-  talukas: GeoRef[];
   technologies: TechnologyOption[];
 }) {
   const name = (list: { id: string; name: string }[] | undefined, id: string) => list?.find((x) => x.id === id)?.name ?? '—';
@@ -1111,7 +1075,7 @@ function FormPreview({
     ['Mobile Number', form.mobile_number],
     ['Religion', form.religion],
     ['Caste', name(options.castes, form.caste_id)],
-    ...basicExtraRows(form, name(options.districts, form.district_id), name(talukas, form.taluka_id)),
+    ...basicExtraRows(form, name(options.districts, form.district_id)),
   ];
   const main: [string, string][] = [
     [FIELD_LABELS.region_id, name(options.regions, form.region_id)],
@@ -1181,8 +1145,8 @@ function FormPreview({
   );
 }
 
-/* Step 1 rows after Caste, shared by the preview and the submitted view (names of district / taluka given). */
-function basicExtraRows(form: Form, district: string, taluka: string, display?: Record<string, string | null>): [string, string][] {
+/* Step 1 rows after Caste, shared by the preview and the submitted view (the district's name given; the taluka is typed). */
+function basicExtraRows(form: Form, district: string, display?: Record<string, string | null>): [string, string][] {
   const L = FIELD_LABELS;
   return [
     [L.gender, display?.gender ?? form.gender],
@@ -1193,7 +1157,7 @@ function basicExtraRows(form: Form, district: string, taluka: string, display?: 
     [L.permanent_address, form.permanent_address],
     [L.landmark, form.landmark],
     [L.district_id, district],
-    [L.taluka_id, taluka],
+    [L.taluka, display?.taluka ?? form.taluka],
     [L.pin_code, form.pin_code],
     [L.disability_status, form.disability_status],
     ...(isDisabled(form)
@@ -1238,12 +1202,7 @@ function FormDetails({ form, options, display, aadhaar }: { form: Form; options:
     ['Mobile Number', form.mobile_number],
     ['Religion', form.religion],
     ['Caste', display?.caste ?? name(options.castes, form.caste_id) ?? '—'],
-    ...basicExtraRows(
-      form,
-      display?.district ?? name(options.districts, form.district_id) ?? '—',
-      display?.taluka ?? '—',
-      display,
-    ),
+    ...basicExtraRows(form, display?.district ?? name(options.districts, form.district_id) ?? '—', display),
     [FIELD_LABELS.region_id, display?.course_centre ?? name(options.regions, form.region_id) ?? '—'],
     [FIELD_LABELS.centre_id, display?.centre ?? centreLabel(options, form.centre_id)],
     ['Technology', display?.technology ?? options.tracks.find((t) => t.code === form.technology)?.name ?? '—'],

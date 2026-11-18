@@ -45,7 +45,7 @@ const FORM: Form = {
   permanent_address: 'Kothrud, Pune',
   landmark: '',
   district_id: 'dist1',
-  taluka_id: 'tal1',
+  taluka: 'Haveli',
   pin_code: '411038',
   alternate_mobile_number: '',
   alternate_email: '',

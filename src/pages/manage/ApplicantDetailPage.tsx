@@ -174,7 +174,7 @@ export default function ApplicantDetailPage() {
     [L.permanent_address, form.permanent_address],
     [L.landmark, form.landmark],
     [L.district_id, d.district],
-    [L.taluka_id, d.taluka],
+    [L.taluka, d.taluka],
     [L.pin_code, form.pin_code],
   ];
   const course: Rows = [

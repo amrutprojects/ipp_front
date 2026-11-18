@@ -110,7 +110,7 @@ export const FIELD_LABELS: Record<FormField, string> = {
   permanent_address: 'Permanent Address',
   landmark: 'Landmark',
   district_id: 'District',
-  taluka_id: 'Taluka',
+  taluka: 'Taluka',
   pin_code: 'PIN Code',
   alternate_mobile_number: 'Alternate Mobile Number',
   alternate_email: 'Alternate Email',
@@ -197,7 +197,7 @@ const RULES: Record<FormField, Rule> = {
   permanent_address: text('Permanent address', 500),
   landmark: optionalMax('Landmark', 150),
   district_id: required('District'),
-  taluka_id: required('Taluka'),
+  taluka: optionalMax('Taluka', 100),
   pin_code: pinCodeIssue,
   alternate_mobile_number: (v, { form }) => {
     if (!v.trim()) return null;
