@@ -3,6 +3,8 @@ import ApplicationPage from './pages/ApplicationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import LoginPage from './pages/LoginPage';
 import ApplicantDetailPage from './pages/manage/ApplicantDetailPage';
+import BatchDetailPage from './pages/manage/BatchDetailPage';
+import BatchesPage from './pages/manage/BatchesPage';
 import ManageLoginPage from './pages/manage/ManageLoginPage';
 import CentreDetailPage from './pages/manage/CentreDetailPage';
 import CentreFormPage from './pages/manage/CentreFormPage';
@@ -51,6 +53,22 @@ export default function App() {
             element={
               <RequireManage>
                 <ApplicantDetailPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/batches"
+            element={
+              <RequireManage>
+                <BatchesPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/batches/:id"
+            element={
+              <RequireManage>
+                <BatchDetailPage />
               </RequireManage>
             }
           />

@@ -104,6 +104,7 @@ function SettingsCard<T extends { updated_at: string | null; updated_by: string 
   sub,
   state,
   extraAction,
+  unsaved = 'Not saved yet: the portal is using its default wording.',
   children,
 }: {
   id: string;
@@ -112,6 +113,8 @@ function SettingsCard<T extends { updated_at: string | null; updated_by: string 
   state: ReturnType<typeof useSettingsForm<T, F>>;
   /* A button beside Save, for whatever this section alone offers (e.g. Reset to default text). */
   extraAction?: ReactNode;
+  /* Shown while the row has never been saved (the defaults are in use). */
+  unsaved?: string;
   children: ReactNode;
 }) {
   const canEdit = useCanEdit();
@@ -141,7 +144,7 @@ function SettingsCard<T extends { updated_at: string | null; updated_by: string 
                 {saved.updated_by ? ` by ${saved.updated_by}` : ''}
               </p>
             ) : (
-              <p className="hint">Not saved yet: the portal is using its default wording.</p>
+              <p className="hint">{unsaved}</p>
             )}
             <SaveRow busy={state.busy}>{extraAction}</SaveRow>
           </form>
@@ -469,9 +472,58 @@ function HelpSection() {
   );
 }
 
+/* ---------- Batch size: the most students one batch may hold (Batches) ---------- */
+
+interface BatchSettings {
+  max_size: number;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+function BatchSection() {
+  const canEdit = useCanEdit();
+  const state = useSettingsForm<BatchSettings, { max_size: string }>({
+    path: '/manage/settings/batch',
+    blank: { max_size: '' },
+    toForm: (saved) => ({ max_size: String(saved.max_size) }),
+    toBody: (form) => ({ max_size: Number(form.max_size) }),
+    issues: (form) => {
+      const n = Number(form.max_size);
+      return { max_size: form.max_size.trim() && Number.isInteger(n) && n >= 1 && n <= 100 ? '' : 'Enter a whole number from 1 to 100' };
+    },
+    saved: 'Batch size saved.',
+  });
+  return (
+    <SettingsCard
+      id="batch"
+      title="Batch size"
+      sub="The most students one batch may hold (1 to 100). A batch with more students is refused until this number is raised; existing batches are not changed."
+      state={state}
+      unsaved="Not saved yet: batches use the default size of 30."
+    >
+      <Field id="batch-max-size" label="Students per batch (maximum)" error={state.errors.max_size}>
+        <input
+          id="batch-max-size"
+          className="inp"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={100}
+          step={1}
+          style={{ maxWidth: 160 }}
+          value={state.form.max_size}
+          disabled={!canEdit}
+          onChange={(e) => state.edit((f) => ({ ...f, max_size: e.target.value }), 'max_size')}
+        />
+      </Field>
+    </SettingsCard>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <ManageShell>
+      <BatchSection />
       <SupportSection />
       <WelcomeSection />
       <HelpSection />

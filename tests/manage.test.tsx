@@ -24,6 +24,8 @@ const student = (over: Partial<Applicant> = {}): Applicant => ({
   registration_number: null,
   last_activity_at: '2026-10-24T12:00:00Z',
   follow_up: null,
+  can_approve: false,
+  approval: null,
   ...over,
 });
 

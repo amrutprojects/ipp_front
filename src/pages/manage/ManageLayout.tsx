@@ -31,7 +31,7 @@ export function ManageHeader() {
   );
 }
 
-/* Applicants (the student tracking list), Center Master, for an admin Users, and Settings (read-only for a viewer). */
+/* Applicants (the student tracking list), Batches, Center Master, for an admin Users, and Settings (read-only for a viewer). */
 export function ManageNav() {
   const canEdit = useCanEdit();
   return (
@@ -39,6 +39,7 @@ export function ManageNav() {
       <NavLink to="/manage" end>
         Applicants
       </NavLink>
+      <NavLink to="/manage/batches">Batches</NavLink>
       <NavLink to="/manage/centres">Center Master</NavLink>
       {canEdit ? <NavLink to="/manage/users">Users</NavLink> : null}
       <NavLink to="/manage/settings">Settings</NavLink>

@@ -646,6 +646,55 @@ table.tbl {
   background: var(--green-bg);
   color: var(--green);
 }
+/* Division Officer status of a form the panel approved (Student tracking list). */
+.badge.do-PENDING {
+  background: var(--info-bg);
+  color: var(--info);
+}
+.badge.do-APPROVED {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.badge.do-REJECTED {
+  background: var(--red-bg);
+  color: var(--red);
+}
+.do-cell {
+  min-width: 200px;
+  max-width: 280px;
+}
+.do-register {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--green);
+}
+.do-reason {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--red);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* Selection for "Approve selected": a checkbox column and the ticked rows highlighted. */
+.tbl .sel-cell {
+  width: 36px;
+  text-align: center;
+}
+.tbl .sel-cell input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--brand-600);
+  cursor: pointer;
+}
+.tbl tr.row-selected td {
+  background: var(--brand-050);
+}
+.approve-list {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  max-height: 220px;
+  overflow: auto;
+}
 .fu-contact {
   margin: -4px 0 14px;
   font-size: 13.5px;

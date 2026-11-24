@@ -26,6 +26,8 @@ const row: Applicant = {
   registration_number: '1028153012345678',
   last_activity_at: '2026-10-25T09:00:00Z',
   follow_up: null,
+  can_approve: false,
+  approval: null,
 };
 
 const FORM: Form = {

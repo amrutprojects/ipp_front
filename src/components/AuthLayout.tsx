@@ -59,8 +59,8 @@ export function AuthLayout({ children, wide, panel = 'student' }: { children: Re
                   'Account created, OTP verified, steps 1 and 2 filled, form submitted — see how far each student got and follow up with those who stopped.',
                 )
               : T(
-                  'उद्योजकता विकास कार्यक्रमासाठी ऑनलाइन नोंदणी: मोबाईल OTP ने खाते पडताळा, तीन टप्प्यांत फॉर्म भरा, कागदपत्रे अपलोड करा आणि आपल्या अर्जाची माहिती कधीही पहा.',
-                  'Online registration for the Entrepreneurship Development Program: verify your account with a mobile OTP, fill in the form in three steps, upload your documents and see your application any time.',
+                  '३ महिन्यांच्या इंटर्नशिप प्लेसमेंट कार्यक्रमासाठी ऑनलाइन नोंदणी: मोबाईल OTP ने खाते पडताळा, तीन टप्प्यांत फॉर्म भरा, कागदपत्रे अपलोड करा आणि आपल्या अर्जाची माहिती कधीही पहा.',
+                  'Online registration for the 3 Month Internship Placement Program: verify your account with a mobile OTP, fill in the form in three steps, upload your documents and see your application any time.',
                 )}
           </p>
           <div className="mode-tags">

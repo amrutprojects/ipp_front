@@ -231,6 +231,78 @@ export interface Applicant {
   last_activity_at: string;
   /* The latest follow-up; null = not followed up yet. */
   follow_up: FollowUp | null;
+  /* Submitted and with the Auditor (not approved yet, or sent back): the panel can approve it (to the Division Officer). */
+  can_approve: boolean;
+  /* Finally approved (Head Office) and in no batch yet: it can be put into a batch. */
+  can_batch?: boolean;
+  approval: Approval | null;
+}
+
+/*
+ * Approval stages (amrut-kalash-api EDP_APPROVAL_STAGES): after the Auditor (this panel) approves, Division Officer →
+ * COEP → Head Office; APPROVED = final (then in the student register). A rejection sends the student back one stage.
+ */
+export type ApprovalStage = 'DIVISION' | 'COEP' | 'HEAD_OFFICE' | 'APPROVED';
+export type StagePoint = 'AUDITOR' | ApprovalStage;
+/* The list's approval filter: with the Auditor (RETURNED = sent back), a stage, or UNBATCHED (final, no batch yet). */
+export type ApprovalFilter = 'AWAITING' | 'RETURNED' | ApprovalStage | 'UNBATCHED';
+export const APPROVAL_FILTER_LABEL: Record<ApprovalFilter, string> = {
+  AWAITING: 'Not approved yet (with Auditor)',
+  RETURNED: 'Sent back to Auditor',
+  DIVISION: 'With Division Officer',
+  COEP: 'With COEP',
+  HEAD_OFFICE: 'With Head Office',
+  APPROVED: 'Final approved',
+  UNBATCHED: 'Final approved – not in a batch',
+};
+export interface ApprovalEvent {
+  action: 'APPROVE' | 'REJECT';
+  from: { stage: StagePoint; name: string };
+  to: { stage: StagePoint; name: string };
+  /* A rejection's reason. */
+  reason: string | null;
+  by: string | null;
+  at: string;
+}
+export interface Approval {
+  /* null = with the Auditor (not approved yet, or sent back by the Division Officer). */
+  stage: ApprovalStage | null;
+  stage_label: string | null;
+  stage_updated_at: string | null;
+  /* The Auditor's latest approval. */
+  approved_at: string | null;
+  approved_by: string | null;
+  /* The latest move: an approval to the next stage, or a rejection back one stage (with its reason). */
+  last_event: ApprovalEvent | null;
+  /* Finally approved: the student's record in the student register (REG-000123). */
+  register_id: string | null;
+  batch: { id: string; name: string } | null;
+}
+
+/* Batches (/manage/batches): finally approved students at a Center Master centre, at most the batch size. */
+export interface Batch {
+  id: string;
+  name: string;
+  centre: { id: string; name: string | null; code: string | null };
+  students: number;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+export interface BatchMember {
+  id: string;
+  name: string;
+  email: string;
+  mobile_number: string;
+  registration_id: string | null;
+  register_id: string | null;
+  district: string | null;
+}
+export interface BatchDetail extends Batch {
+  /* The batch size setting (the most students a batch may hold). */
+  max_size: number;
+  members: BatchMember[];
 }
 /* One student in the tracking panel: GET /manage/applicants/:id (account id). */
 export interface ApplicantDetail {
@@ -265,6 +337,8 @@ export interface Summary {
   stages: { code: Stage; label: string; count: number }[];
   /* Students per current follow-up status; NONE = not followed up yet. */
   follow_ups: Record<FollowUpStatus | 'NONE', number>;
+  /* Students per approval filter (see ApprovalFilter). Absent from an older API. */
+  approvals?: Partial<Record<ApprovalFilter, number>>;
 }
 
 /* Center Master (the tracking panel's /manage/centres; the same shape as in the Kalash admin panel). */

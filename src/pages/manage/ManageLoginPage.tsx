@@ -46,8 +46,8 @@ export default function ManageLoginPage() {
       <h1>{T('ट्रॅकिंग पॅनेलमध्ये लॉगिन करा', 'Log in to the tracking panel')}</h1>
       <p className="sub">
         {T(
-          'EDP टीमसाठी: खाते तयार होण्यापासून फॉर्म सबमिट होईपर्यंत प्रत्येक विद्यार्थ्याचा मागोवा घ्या.',
-          'For the EDP programme team: track every student from account creation to submission.',
+          '३ महिन्यांच्या इंटर्नशिप प्लेसमेंट कार्यक्रमाच्या टीमसाठी: खाते तयार होण्यापासून फॉर्म सबमिट होईपर्यंत प्रत्येक विद्यार्थ्याचा मागोवा घ्या.',
+          'For the 3 Month Internship Placement Program team: track every student from account creation to submission.',
         )}
       </p>
       <form onSubmit={submit} noValidate>
@@ -70,7 +70,7 @@ export default function ManageLoginPage() {
       </form>
       <div className="sep" />
       <p className="disclaim center" style={{ margin: 0 }}>
-        {T('हे पॅनेल फक्त EDP टीमसाठी आहे.', 'This panel is for the EDP programme team only.')}
+        {T('हे पॅनेल फक्त ३ महिन्यांच्या इंटर्नशिप प्लेसमेंट कार्यक्रमाच्या टीमसाठी आहे.', 'This panel is for the 3 Month Internship Placement Program team only.')}
       </p>
     </AuthLayout>
   );

@@ -144,6 +144,9 @@ export default function ApplicantDetailPage() {
     registration_number: reg?.registration_number ?? null,
     last_activity_at: account.last_login_at ?? account.created_at,
     follow_up: history?.[0] ?? null,
+    /* Not used by the follow-up dialog; approval is done from the list. */
+    can_approve: false,
+    approval: null,
   };
 
   const basic: Rows = [

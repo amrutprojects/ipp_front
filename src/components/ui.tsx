@@ -3,7 +3,7 @@ import { api, ApiError, type Realm } from '../api';
 import { useLang } from '../i18n';
 import type { Options } from '../types';
 
-export const PROGRAM = 'ENTREPRENEURSHIP DEVELOPMENT PROGRAM';
+export const PROGRAM = '3 MONTH INTERNSHIP PLACEMENT PROGRAM';
 export const ORGANISATION = 'Sumago Infotech Pvt. Ltd.';
 
 /* The official Sumago Infotech logo on a white tile (public/sumago-logo.svg, from sumagoinfotech.com). */
