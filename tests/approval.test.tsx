@@ -11,7 +11,7 @@ const base = (id: string, name: string, over: Partial<Applicant>): Applicant => 
   id,
   name,
   email: `${id}@example.com`,
-  mobile_number: '9876543210',
+  mobile_number: '9000000000',
   stage: 'SUBMITTED',
   stage_label: 'Form submitted',
   account_created_at: '2026-10-24T11:30:00Z',
@@ -79,7 +79,7 @@ function mockApi(role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
         base(ID.draft, 'Draft Student', { stage: 'MAIN_DONE', stage_label: 'Step 2 filled (Main Form)', submitted_at: null }),
         base(
           ID.submitted,
-          'Satish Aurange',
+          'Asha Kulkarni',
           approved
             ? {
                 approval: approval({
@@ -97,7 +97,7 @@ function mockApi(role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
               }
             : { can_approve: true, approval: approval({}) },
         ),
-        base(ID.coep, 'Keshav Mahale', {
+        base(ID.coep, 'Nikhil Deshpande', {
           approval: approval({
             stage: 'COEP',
             stage_label: 'With COEP',
@@ -111,7 +111,7 @@ function mockApi(role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
             },
           }),
         }),
-        base(ID.returned, 'Kavya Jadhav', {
+        base(ID.returned, 'Meera Joshi', {
           can_approve: true,
           approval: approval({
             last_event: {
@@ -124,7 +124,7 @@ function mockApi(role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
             },
           }),
         }),
-        base(ID.final, 'Rahul Patil', {
+        base(ID.final, 'Omkar Shinde', {
           can_batch: true,
           approval: approval({ stage: 'APPROVED', stage_label: 'Final approved', register_id: 'REG-000009' }),
         }),
@@ -167,40 +167,40 @@ describe('Tracking panel approval stages and batches', () => {
     mockApi();
     renderPage();
     expect(await screen.findByRole('columnheader', { name: 'Approval stage' })).toBeInTheDocument();
-    await screen.findByText('Satish Aurange');
-    expect(within(row('Satish Aurange')).getByText('Not approved yet')).toBeInTheDocument();
-    expect(within(row('Keshav Mahale')).getByText('With COEP')).toBeInTheDocument();
-    expect(within(row('Kavya Jadhav')).getByText('Sent back to Auditor')).toBeInTheDocument();
-    expect(within(row('Kavya Jadhav')).getByText(/Aadhaar copy is not readable/)).toBeInTheDocument();
-    expect(within(row('Rahul Patil')).getByText('Final approved')).toBeInTheDocument();
-    expect(within(row('Rahul Patil')).getByText('REG-000009')).toBeInTheDocument();
-    expect(within(row('Rahul Patil')).getByText('Not in a batch yet')).toBeInTheDocument();
+    await screen.findByText('Asha Kulkarni');
+    expect(within(row('Asha Kulkarni')).getByText('Not approved yet')).toBeInTheDocument();
+    expect(within(row('Nikhil Deshpande')).getByText('With COEP')).toBeInTheDocument();
+    expect(within(row('Meera Joshi')).getByText('Sent back to Auditor')).toBeInTheDocument();
+    expect(within(row('Meera Joshi')).getByText(/Aadhaar copy is not readable/)).toBeInTheDocument();
+    expect(within(row('Omkar Shinde')).getByText('Final approved')).toBeInTheDocument();
+    expect(within(row('Omkar Shinde')).getByText('REG-000009')).toBeInTheDocument();
+    expect(within(row('Omkar Shinde')).getByText('Not in a batch yet')).toBeInTheDocument();
 
-    expect(within(row('Satish Aurange')).getByRole('checkbox', { name: "Select Satish Aurange's form for approval" })).toBeInTheDocument();
-    expect(within(row('Kavya Jadhav')).getByRole('checkbox', { name: "Select Kavya Jadhav's form for approval" })).toBeInTheDocument();
-    expect(within(row('Rahul Patil')).getByRole('checkbox', { name: 'Select Rahul Patil for a batch' })).toBeInTheDocument();
-    for (const name of ['Draft Student', 'Keshav Mahale']) expect(within(row(name)).queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(within(row('Keshav Mahale')).queryByRole('button', { name: /^Approve/ })).not.toBeInTheDocument();
+    expect(within(row('Asha Kulkarni')).getByRole('checkbox', { name: "Select Asha Kulkarni's form for approval" })).toBeInTheDocument();
+    expect(within(row('Meera Joshi')).getByRole('checkbox', { name: "Select Meera Joshi's form for approval" })).toBeInTheDocument();
+    expect(within(row('Omkar Shinde')).getByRole('checkbox', { name: 'Select Omkar Shinde for a batch' })).toBeInTheDocument();
+    for (const name of ['Draft Student', 'Nikhil Deshpande']) expect(within(row(name)).queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(within(row('Nikhil Deshpande')).queryByRole('button', { name: /^Approve/ })).not.toBeInTheDocument();
   });
 
   it('approves one form after confirmation; it goes to the Division Officer', async () => {
     const calls = mockApi();
     renderPage();
-    await userEvent.click(await screen.findByRole('button', { name: "Approve Satish Aurange's form" }));
-    const dialog = screen.getByRole('alertdialog', { name: "Approve Satish Aurange's form?" });
+    await userEvent.click(await screen.findByRole('button', { name: "Approve Asha Kulkarni's form" }));
+    const dialog = screen.getByRole('alertdialog', { name: "Approve Asha Kulkarni's form?" });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve' }));
     expect(await screen.findByText(/form approved and sent to the Division Officer/)).toBeInTheDocument();
     expect(calls.some((c) => c.method === 'POST' && c.url.endsWith(`/manage/applicants/${ID.submitted}/approve`))).toBe(true);
-    await waitFor(() => expect(within(row('Satish Aurange')).getByText('With Division Officer')).toBeInTheDocument());
+    await waitFor(() => expect(within(row('Asha Kulkarni')).getByText('With Division Officer')).toBeInTheDocument());
   });
 
   it('approves the ticked forms with "Approve selected", and only those', async () => {
     const calls = mockApi();
     renderPage();
-    await screen.findByText('Satish Aurange');
+    await screen.findByText('Asha Kulkarni');
     expect(screen.getByRole('button', { name: 'Approve selected (0)' })).toBeDisabled();
-    await userEvent.click(screen.getByRole('checkbox', { name: "Select Satish Aurange's form for approval" }));
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Rahul Patil for a batch' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: "Select Asha Kulkarni's form for approval" }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Omkar Shinde for a batch' }));
     /* The final-approved tick counts for a batch, not for approval. */
     await userEvent.click(screen.getByRole('button', { name: 'Approve selected (1)' }));
     const dialog = screen.getByRole('alertdialog', { name: 'Approve 1 selected form?' });
@@ -212,13 +212,13 @@ describe('Tracking panel approval stages and batches', () => {
   it('creates a batch of the ticked finally approved students, with a name and a centre', async () => {
     const calls = mockApi();
     renderPage();
-    await screen.findByText('Rahul Patil');
+    await screen.findByText('Omkar Shinde');
     expect(screen.getByRole('button', { name: 'Create batch (0)' })).toBeDisabled();
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Rahul Patil for a batch' }));
-    await userEvent.click(screen.getByRole('checkbox', { name: "Select Satish Aurange's form for approval" }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Omkar Shinde for a batch' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: "Select Asha Kulkarni's form for approval" }));
     await userEvent.click(screen.getByRole('button', { name: 'Create batch (1)' }));
     const dialog = screen.getByRole('dialog', { name: 'Create a batch of 1 student' });
-    expect(within(dialog).getByText('Rahul Patil')).toBeInTheDocument();
+    expect(within(dialog).getByText('Omkar Shinde')).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create batch' }));
     expect(within(dialog).getByText('Enter a batch name (at least 2 characters)')).toBeInTheDocument();
     await userEvent.type(within(dialog).getByLabelText(/Batch name/), 'Pune Batch 1');
@@ -236,7 +236,7 @@ describe('Tracking panel approval stages and batches', () => {
   it('shows no approve, batch buttons or checkboxes to a view-only account', async () => {
     mockApi('VIEWER');
     renderPage();
-    await screen.findByText('Satish Aurange');
+    await screen.findByText('Asha Kulkarni');
     await waitFor(() => expect(screen.queryByRole('button', { name: /^(Approve|Create batch)/ })).not.toBeInTheDocument());
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   });
