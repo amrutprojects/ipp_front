@@ -8,8 +8,8 @@ export type ApproveTarget = { kind: 'one'; applicant: Applicant } | { kind: 'sel
 
 /*
  * The confirmation before approving — POST /manage/applicants/:id/approve or /manage/applicants/approve-selected on
- * Yes. An approved form goes to the Division Officer (Admin Panel → Student Registration), who approves or rejects it;
- * the list then shows the Division Officer status.
+ * Yes. An approved form goes to the Divisional Officer (Admin Panel → Student Registration), who approves or rejects it;
+ * the list then shows the Divisional Officer status.
  */
 export default function ApproveDialog({
   target,
@@ -29,7 +29,7 @@ export default function ApproveDialog({
     try {
       if (target.kind === 'one') {
         await api<{ approved: number }>(`/manage/applicants/${target.applicant.id}/approve`, { method: 'POST', realm: 'manage' });
-        onDone(`${target.applicant.name}'s form approved and sent to the Division Officer.`);
+        onDone(`${target.applicant.name}'s form approved and sent to the Divisional Officer.`);
         return;
       }
       const res = await api<{ approved: number; skipped: number }>('/manage/applicants/approve-selected', {
@@ -40,7 +40,7 @@ export default function ApproveDialog({
       const { approved, skipped } = res.data;
       onDone(
         (approved
-          ? `${approved} form${approved === 1 ? '' : 's'} approved and sent to the Division Officer.`
+          ? `${approved} form${approved === 1 ? '' : 's'} approved and sent to the Divisional Officer.`
           : 'None of the selected forms was waiting for approval.') +
           (skipped ? ` ${skipped} selected form${skipped === 1 ? ' was' : 's were'} skipped (already approved or not submitted).` : ''),
       );
@@ -60,8 +60,8 @@ export default function ApproveDialog({
       {error ? <Notice tone="error">{error}</Notice> : null}
       <p>
         {target.kind === 'one'
-          ? `The submitted form${target.applicant.registration_id ? ` (${target.applicant.registration_id})` : ''} will be sent to the Division Officer for approval.`
-          : 'The selected forms will be sent to the Division Officer for approval.'}{' '}
+          ? `The submitted form${target.applicant.registration_id ? ` (${target.applicant.registration_id})` : ''} will be sent to the Divisional Officer for approval.`
+          : 'The selected forms will be sent to the Divisional Officer for approval.'}{' '}
         This cannot be undone.
       </p>
       {target.kind === 'selected' ? (

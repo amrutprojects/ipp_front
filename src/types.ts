@@ -231,7 +231,7 @@ export interface Applicant {
   last_activity_at: string;
   /* The latest follow-up; null = not followed up yet. */
   follow_up: FollowUp | null;
-  /* Submitted and with the Auditor (not approved yet, or sent back): the panel can approve it (to the Division Officer). */
+  /* Submitted and with the Auditor (not approved yet, or sent back): the panel can approve it (to the Divisional Officer). */
   can_approve: boolean;
   /* Finally approved (Head Office) and in no batch yet: it can be put into a batch. */
   can_batch?: boolean;
@@ -239,7 +239,7 @@ export interface Applicant {
 }
 
 /*
- * Approval stages (amrut-kalash-api EDP_APPROVAL_STAGES): after the Auditor (this panel) approves, Division Officer →
+ * Approval stages (amrut-kalash-api EDP_APPROVAL_STAGES): after the Auditor (this panel) approves, Divisional Officer →
  * COEP → Head Office; APPROVED = final (then in the student register). A rejection sends the student back one stage.
  */
 export type ApprovalStage = 'DIVISION' | 'COEP' | 'HEAD_OFFICE' | 'APPROVED';
@@ -249,7 +249,7 @@ export type ApprovalFilter = 'AWAITING' | 'RETURNED' | ApprovalStage | 'UNBATCHE
 export const APPROVAL_FILTER_LABEL: Record<ApprovalFilter, string> = {
   AWAITING: 'Not approved yet (with Auditor)',
   RETURNED: 'Sent back to Auditor',
-  DIVISION: 'With Division Officer',
+  DIVISION: 'With Divisional Officer',
   COEP: 'With COEP',
   HEAD_OFFICE: 'With Head Office',
   APPROVED: 'Final approved',
@@ -265,7 +265,7 @@ export interface ApprovalEvent {
   at: string;
 }
 export interface Approval {
-  /* null = with the Auditor (not approved yet, or sent back by the Division Officer). */
+  /* null = with the Auditor (not approved yet, or sent back by the Divisional Officer). */
   stage: ApprovalStage | null;
   stage_label: string | null;
   stage_updated_at: string | null;

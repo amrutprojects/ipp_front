@@ -84,11 +84,11 @@ function mockApi(role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
             ? {
                 approval: approval({
                   stage: 'DIVISION',
-                  stage_label: 'With Division Officer',
+                  stage_label: 'With Divisional Officer',
                   last_event: {
                     action: 'APPROVE',
                     from: point('AUDITOR', 'Auditor'),
-                    to: point('DIVISION', 'Division Officer'),
+                    to: point('DIVISION', 'Divisional Officer'),
                     reason: null,
                     by: 'Program Auditor',
                     at: '2026-11-24T10:00:00Z',
@@ -103,10 +103,10 @@ function mockApi(role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
             stage_label: 'With COEP',
             last_event: {
               action: 'APPROVE',
-              from: point('DIVISION', 'Division Officer'),
+              from: point('DIVISION', 'Divisional Officer'),
               to: point('COEP', 'COEP'),
               reason: null,
-              by: 'Division Officer Pune',
+              by: 'Divisional Officer Pune',
               at: '2026-11-24T11:00:00Z',
             },
           }),
@@ -116,10 +116,10 @@ function mockApi(role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
           approval: approval({
             last_event: {
               action: 'REJECT',
-              from: point('DIVISION', 'Division Officer'),
+              from: point('DIVISION', 'Divisional Officer'),
               to: point('AUDITOR', 'Auditor'),
               reason: 'Aadhaar copy is not readable',
-              by: 'Division Officer Pune',
+              by: 'Divisional Officer Pune',
               at: '2026-11-24T12:00:00Z',
             },
           }),
@@ -183,15 +183,15 @@ describe('Tracking panel approval stages and batches', () => {
     expect(within(row('Nikhil Deshpande')).queryByRole('button', { name: /^Approve/ })).not.toBeInTheDocument();
   });
 
-  it('approves one form after confirmation; it goes to the Division Officer', async () => {
+  it('approves one form after confirmation; it goes to the Divisional Officer', async () => {
     const calls = mockApi();
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: "Approve Asha Kulkarni's form" }));
     const dialog = screen.getByRole('alertdialog', { name: "Approve Asha Kulkarni's form?" });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve' }));
-    expect(await screen.findByText(/form approved and sent to the Division Officer/)).toBeInTheDocument();
+    expect(await screen.findByText(/form approved and sent to the Divisional Officer/)).toBeInTheDocument();
     expect(calls.some((c) => c.method === 'POST' && c.url.endsWith(`/manage/applicants/${ID.submitted}/approve`))).toBe(true);
-    await waitFor(() => expect(within(row('Asha Kulkarni')).getByText('With Division Officer')).toBeInTheDocument());
+    await waitFor(() => expect(within(row('Asha Kulkarni')).getByText('With Divisional Officer')).toBeInTheDocument());
   });
 
   it('approves the ticked forms with "Approve selected", and only those', async () => {
@@ -205,7 +205,7 @@ describe('Tracking panel approval stages and batches', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Approve selected (1)' }));
     const dialog = screen.getByRole('alertdialog', { name: 'Approve 1 selected form?' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve selected' }));
-    expect(await screen.findByText('1 form approved and sent to the Division Officer.')).toBeInTheDocument();
+    expect(await screen.findByText('1 form approved and sent to the Divisional Officer.')).toBeInTheDocument();
     expect(calls.find((c) => c.url.endsWith('/manage/applicants/approve-selected'))?.body).toEqual({ ids: [ID.submitted] });
   });
 

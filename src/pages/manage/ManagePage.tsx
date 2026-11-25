@@ -20,7 +20,7 @@ import { ManageHeader, ManageNav } from './ManageLayout';
 const LIMIT = 25;
 
 /*
- * Approval stage: after the Auditor (this panel) approves a submitted form, Division Officer → COEP → Head Office
+ * Approval stage: after the Auditor (this panel) approves a submitted form, Divisional Officer → COEP → Head Office
  * (Admin Panel → Student Approval Stages) each approve or reject it. A rejection sends the student back one stage,
  * with the reason shown here; Head Office's approval is final (student register, then a batch).
  */

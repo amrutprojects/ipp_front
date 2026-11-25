@@ -646,7 +646,7 @@ table.tbl {
   background: var(--green-bg);
   color: var(--green);
 }
-/* Division Officer status of a form the panel approved (Student tracking list). */
+/* Divisional Officer status of a form the panel approved (Student tracking list). */
 .badge.do-PENDING {
   background: var(--info-bg);
   color: var(--info);
