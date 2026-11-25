@@ -3,7 +3,7 @@ import { api, ApiError } from '../../api';
 import { DEFAULT_SUPPORT_MESSAGE, SupportMessage } from '../../components/SupportMessage';
 import { Field, fmtDate, Notice } from '../../components/ui';
 import { useCanEdit } from '../../session';
-import { HELP_FIELDS, type HelpSettings, type SupportSettings, type WelcomeSettings } from '../../types';
+import { HELP_FIELDS, type BatchSettings, type HelpSettings, type SupportSettings, type WelcomeSettings } from '../../types';
 import {
   helpIssues,
   supportIssues,
@@ -409,7 +409,7 @@ function HelpSection() {
       <div className="mt16">
         <h3>Contact details</h3>
         <p className="hint">
-          Each line is a name and its value, e.g. Contact Number / 8530092236 or Email ID / edp@sumago.ai. An email address or a phone number
+          Each line is a name and its value, e.g. Contact Number / 8530092236 or Email ID / support@sumago.ai. An email address or a phone number
           is shown as a link. Leave a line blank to drop it.
         </p>
         {errors.fields ? (
@@ -472,24 +472,18 @@ function HelpSection() {
   );
 }
 
-/* ---------- Batch size: the most students one batch may hold (Batches) ---------- */
-
-interface BatchSettings {
-  max_size: number;
-  updated_at: string | null;
-  updated_by: string | null;
-}
+/* ---------- Batch size: the exact number of students of a new batch (Batches) ---------- */
 
 function BatchSection() {
   const canEdit = useCanEdit();
-  const state = useSettingsForm<BatchSettings, { max_size: string }>({
+  const state = useSettingsForm<BatchSettings, { size: string }>({
     path: '/manage/settings/batch',
-    blank: { max_size: '' },
-    toForm: (saved) => ({ max_size: String(saved.max_size) }),
-    toBody: (form) => ({ max_size: Number(form.max_size) }),
+    blank: { size: '' },
+    toForm: (saved) => ({ size: String(saved.size) }),
+    toBody: (form) => ({ size: Number(form.size) }),
     issues: (form) => {
-      const n = Number(form.max_size);
-      return { max_size: form.max_size.trim() && Number.isInteger(n) && n >= 1 && n <= 100 ? '' : 'Enter a whole number from 1 to 100' };
+      const n = Number(form.size);
+      return { size: form.size.trim() && Number.isInteger(n) && n >= 1 && n <= 100 ? '' : 'Enter a whole number from 1 to 100' };
     },
     saved: 'Batch size saved.',
   });
@@ -497,13 +491,13 @@ function BatchSection() {
     <SettingsCard
       id="batch"
       title="Batch size"
-      sub="The most students one batch may hold (1 to 100). A batch with more students is refused until this number is raised; existing batches are not changed."
+      sub="Every new batch has exactly this many students, all of one district. Existing batches are not changed."
       state={state}
-      unsaved="Not saved yet: batches use the default size of 30."
+      unsaved="Not saved yet: batches use the default size."
     >
-      <Field id="batch-max-size" label="Students per batch (maximum)" error={state.errors.max_size}>
+      <Field id="batch-size" label="Number of students in one batch (exact, 1–100)" error={state.errors.size}>
         <input
-          id="batch-max-size"
+          id="batch-size"
           className="inp"
           type="number"
           inputMode="numeric"
@@ -511,9 +505,10 @@ function BatchSection() {
           max={100}
           step={1}
           style={{ maxWidth: 160 }}
-          value={state.form.max_size}
+          value={state.form.size}
           disabled={!canEdit}
-          onChange={(e) => state.edit((f) => ({ ...f, max_size: e.target.value }), 'max_size')}
+          onChange={(e) => state.edit((f) => ({ ...f, size: e.target.value }), 'size')}
+          aria-invalid={!!state.errors.size || undefined}
         />
       </Field>
     </SettingsCard>

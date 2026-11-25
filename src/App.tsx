@@ -9,7 +9,13 @@ import ManageLoginPage from './pages/manage/ManageLoginPage';
 import CentreDetailPage from './pages/manage/CentreDetailPage';
 import CentreFormPage from './pages/manage/CentreFormPage';
 import CentresPage from './pages/manage/CentresPage';
+import EditFormPage from './pages/manage/EditFormPage';
 import ManagePage from './pages/manage/ManagePage';
+import DistrictsPage from './pages/manage/masters/DistrictsPage';
+import DocumentsMasterPage from './pages/manage/masters/DocumentsMasterPage';
+import FormFieldsPage from './pages/manage/masters/FormFieldsPage';
+import ListsPage from './pages/manage/masters/ListsPage';
+import TechnologiesPage from './pages/manage/masters/TechnologiesPage';
 import SettingsPage from './pages/manage/SettingsPage';
 import UserFormPage from './pages/manage/UserFormPage';
 import UsersPage from './pages/manage/UsersPage';
@@ -57,6 +63,14 @@ export default function App() {
             }
           />
           <Route
+            path="/manage/applicants/:id/edit"
+            element={
+              <RequireManageAdmin viewerTo="/manage">
+                <EditFormPage />
+              </RequireManageAdmin>
+            }
+          />
+          <Route
             path="/manage/batches"
             element={
               <RequireManage>
@@ -69,6 +83,47 @@ export default function App() {
             element={
               <RequireManage>
                 <BatchDetailPage />
+              </RequireManage>
+            }
+          />
+          <Route path="/manage/masters" element={<Navigate to="/manage/masters/lists" replace />} />
+          <Route
+            path="/manage/masters/lists/:kind?"
+            element={
+              <RequireManage>
+                <ListsPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/masters/technologies"
+            element={
+              <RequireManage>
+                <TechnologiesPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/masters/documents"
+            element={
+              <RequireManage>
+                <DocumentsMasterPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/masters/fields"
+            element={
+              <RequireManage>
+                <FormFieldsPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/masters/districts"
+            element={
+              <RequireManage>
+                <DistrictsPage />
               </RequireManage>
             }
           />

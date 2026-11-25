@@ -10,8 +10,8 @@ const VIEW_ONLY = 'Your account can only view. Ask an administrator to make this
 
 const user = (over: Partial<ManageUser> = {}): ManageUser => ({
   id: 'm1',
-  name: 'EDP Admin',
-  email: 'edp.admin@example.com',
+  name: 'Program Admin',
+  email: 'admin@example.com',
   role: 'ADMIN',
   is_active: true,
   last_login_at: '2026-10-27T09:00:00Z',
@@ -48,9 +48,9 @@ const centre: Centre = {
 
 const applicant: Applicant = {
   id: '11111111-1111-4111-8111-111111111111',
-  name: 'Keshav Mahale',
-  email: 'keshav@example.com',
-  mobile_number: '7767841795',
+  name: 'Rohan Pawar',
+  email: 'rohan@example.com',
+  mobile_number: '9000000000',
   stage: 'MAIN_DONE',
   stage_label: 'Step 2 filled (Main Form)',
   account_created_at: '2026-10-24T11:30:00Z',
@@ -61,14 +61,22 @@ const applicant: Applicant = {
   submitted_at: null,
   registration_id: null,
   registration_number: null,
+  district_id: null,
+  district: null,
+  category: null,
+  centre: null,
+  documents: { uploaded: 0, verified: 0 },
+  documents_verified: false,
+  final_verified: false,
   last_activity_at: '2026-10-24T12:00:00Z',
   follow_up: null,
   can_approve: false,
+  can_batch: false,
   approval: null,
 };
 
 const history: FollowUp[] = [
-  { status: 'CALLED', status_label: 'Follow-up call', note: 'Will upload by Friday', at: '2026-10-24T12:30:00Z', by: 'EDP Admin' },
+  { status: 'CALLED', status_label: 'Follow-up call', note: 'Will upload by Friday', at: '2026-10-24T12:30:00Z', by: 'Program Admin' },
 ];
 
 interface Opts {
@@ -87,7 +95,7 @@ function mockApi(opts: Opts = {}) {
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
     calls.push({ method, url, body });
     const viewer = role === 'VIEWER';
-    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'EDP Admin', email: 'edp.admin@example.com', role } });
+    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'Program Admin', email: 'admin@example.com', role } });
     if (url.endsWith('/manage/users') && method === 'GET') return viewer ? json(403, { message: VIEW_ONLY }) : json(200, { data: users });
     if (url.endsWith('/manage/users') && method === 'POST') {
       if (opts.createUser) return opts.createUser(body);
@@ -106,6 +114,8 @@ function mockApi(opts: Opts = {}) {
     if (url.endsWith('/manage/centres/c1')) return json(200, { data: centre });
     if (url.endsWith('/manage/summary'))
       return json(200, { data: { total: 1, counts: {}, stages: [], follow_ups: { NONE: 0, PENDING: 0, CALLED: 1, SECOND_CALL: 0, FORM_FILLED: 0 } } });
+    if (url.endsWith('/manage/filters')) return json(200, { data: { districts: [], categories: [], centres: [], stages: [] } });
+    if (url.endsWith('/manage/settings/batch')) return json(200, { data: { size: 2, updated_at: null, updated_by: null } });
     if (url.includes('/manage/applicants?'))
       return json(200, { data: [{ ...applicant, follow_up: history[0] }], meta: { page: 1, limit: 25, total: 1, totalPages: 1 } });
     if (url.endsWith('/follow-ups') && method === 'GET') return json(200, { data: history });
@@ -142,7 +152,7 @@ describe('Users (tracking panel, admins only)', () => {
     expect(asha).toHaveTextContent('Viewer');
     expect(asha).toHaveTextContent('Active');
     expect(within(asha).getByRole('button', { name: 'Deactivate Asha Patil' })).toBeInTheDocument();
-    const me = screen.getByRole('row', { name: /EDP Admin/ });
+    const me = screen.getByRole('row', { name: /Program Admin/ });
     expect(me).toHaveTextContent('Admin');
     expect(within(me).queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByText('View only')).not.toBeInTheDocument();

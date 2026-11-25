@@ -13,6 +13,10 @@ function initial(): Lang {
   }
 }
 
+/* The English or Marathi name of something from the masters; Marathi falls back to English. */
+export const pickName = (lang: Lang, en: string, mr: string | null | undefined) => (lang === 'mr' && mr?.trim() ? mr : en);
+export const docName = (d: { name: string; name_mr?: string | null }, lang: Lang) => pickName(lang, d.name, d.name_mr);
+
 export type Pick = (mr: string, en: string) => string;
 interface LangState {
   lang: Lang;

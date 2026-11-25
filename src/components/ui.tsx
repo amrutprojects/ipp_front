@@ -1,6 +1,6 @@
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { api, ApiError, type Realm } from '../api';
-import { useLang } from '../i18n';
+import { docName, useLang } from '../i18n';
 import type { Options } from '../types';
 
 export const PROGRAM = '3 MONTH INTERNSHIP PLACEMENT PROGRAM';
@@ -192,6 +192,7 @@ export function useRemoteList<T>(path: string | null, realm?: Realm): RemoteList
 /* Shown at the foot of every portal page: the documents to keep ready (the active document types). */
 export function DocumentsReady() {
   const options = useOptions();
+  const { lang } = useLang();
   if (!options?.document_types.length) return null;
   return (
     <aside className="docs-ready" aria-labelledby="docs-ready-title">
@@ -199,8 +200,8 @@ export function DocumentsReady() {
       <ol>
         {options.document_types.map((d) => (
           <li key={d.code}>
-            {d.name}
-            {d.is_mandatory ? <span className="req"> *</span> : /optional/i.test(d.name) ? null : <span className="muted"> (optional)</span>}
+            {docName(d, lang)}
+            {d.is_mandatory ? <span className="req"> *</span> : /optional/i.test(docName(d, lang)) ? null : <span className="muted"> (optional)</span>}
           </li>
         ))}
       </ol>

@@ -1,15 +1,26 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { api, ApiError, downloadFile, openFile } from '../../api';
-import { ddmmyyyy, fmtDate, Notice } from '../../components/ui';
-import type { Applicant, ApplicantDetail, FollowUp, Stage } from '../../types';
-import { FIELD_LABELS as L, isCgpa, isDisabled } from '../../validation';
+import { kb } from '../../components/DocumentField';
+import { fmtDate, Notice } from '../../components/ui';
+import { fallbackView, viewRows } from '../../form';
+import type { Applicant, ApplicantDetail, DocumentCheckSaved, FollowUp, FormEdit, Stage } from '../../types';
+import ApprovalHistory from './ApprovalHistory';
+import ApprovalStageCell from './ApprovalStageCell';
+import ApproveDialog from './ApproveDialog';
 import FollowUpDialog from './FollowUpDialog';
 import { ManageShell } from './ManageLayout';
 import { useCanEdit } from '../../session';
 
-const kb = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
-const GRADING: Record<string, string> = { PERCENTAGE: 'Percentage', CGPA: 'CGPA' };
+/* The cards of the form: the address and the course apart from the rest of their step. */
+const ADDRESS = new Set(['current_address', 'permanent_address', 'landmark', 'district_id', 'taluka', 'pin_code']);
+const COURSE = new Set(['region_id', 'centre_id', 'technology']);
+const CARDS = ['Basic Details', 'Address', 'Course & Center', 'Qualification', 'Additional details'] as const;
+function cardOf(r: { key: string; step: number; custom: boolean }): (typeof CARDS)[number] {
+  if (r.custom) return 'Additional details';
+  if (r.step === 1) return ADDRESS.has(r.key) ? 'Address' : 'Basic Details';
+  return COURSE.has(r.key) ? 'Course & Center' : 'Qualification';
+}
 const STAGE_LABEL: Record<Stage, string> = {
   OTP_PENDING: 'OTP pending',
   VERIFIED: 'OTP verified',
@@ -48,7 +59,103 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/* One student of the tracking panel, read-only: the whole form, the documents and the follow-ups. */
+type Doc = ApplicantDetail['documents'][number];
+
+/*
+ * One uploaded document's verification: whether it is verified, by whom and when, and for an admin Verify / Undo — POST
+ * /manage/applicants/:id/documents/:docType/verify. The form can be approved once every uploaded document is verified.
+ */
+function DocumentCheckCell({
+  accountId,
+  doc,
+  editable,
+  onSaved,
+}: {
+  accountId: string;
+  doc: Doc;
+  editable: boolean;
+  onSaved: (saved: DocumentCheckSaved) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const verified = !!doc.verified?.verified;
+
+  const save = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api<DocumentCheckSaved>(
+        `/manage/applicants/${encodeURIComponent(accountId)}/documents/${encodeURIComponent(doc.code)}/verify`,
+        { method: 'POST', realm: 'manage', body: { verified: !verified } },
+      );
+      onSaved(res.data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="doc-check">
+      <span aria-live="polite">
+        <span className={verified ? 'badge active' : 'badge'}>{verified ? 'Verified' : 'Not verified'}</span>
+        {verified && doc.verified?.at ? (
+          <span className="hint doc-check-by">
+            {doc.verified.by ? `${doc.verified.by} · ` : ''}
+            {fmtDate(doc.verified.at)}
+          </span>
+        ) : null}
+      </span>
+      {editable ? (
+        <button
+          type="button"
+          className={verified ? 'btn ghost sm' : 'btn sm'}
+          aria-label={`${verified ? 'Undo the verification of' : 'Verify'} ${doc.name}`}
+          onClick={() => void save()}
+          disabled={busy}
+        >
+          {busy ? 'Saving…' : verified ? 'Undo' : 'Verify'}
+        </button>
+      ) : null}
+      {error ? (
+        <span className="err" role="alert">
+          {error}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/* What the Auditor changed on the submitted form: when, who, and each field from → to. */
+function Changes({ edits }: { edits: FormEdit[] }) {
+  return (
+    <div className="fu-history approval-history">
+      <ol>
+        {edits.map((e, i) => (
+          <li key={`${e.at}-${i}`}>
+            <div className="hint">
+              {fmtDate(e.at)}
+              {e.by ? ` · ${e.by}` : ''}
+            </div>
+            <ul className="change-list">
+              {e.changes.map((c) => (
+                <li key={c.key}>
+                  <b>{c.label}:</b> {c.from ? <span className="change-from">{c.from}</span> : '—'} → {c.to || '—'}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/*
+ * One student of the tracking panel: the whole form under the fields' current names, the approvals and changes, the
+ * documents (each verified here) and the follow-ups; an admin approves the form and opens Edit form from here.
+ */
 const EyeIcon = () => (
   <svg className="btn-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
     <path
@@ -69,6 +176,9 @@ const DownloadIcon = () => (
 
 export default function ApplicantDetailPage() {
   const { id = '' } = useParams();
+  const location = useLocation();
+  const [flash, setFlash] = useState<string>(() => (location.state as { flash?: string } | null)?.flash ?? '');
+  const [approving, setApproving] = useState(false);
   const [detail, setDetail] = useState<ApplicantDetail | null>(null);
   const [error, setError] = useState('');
   const [fileError, setFileError] = useState('');
@@ -93,15 +203,26 @@ export default function ApplicantDetailPage() {
     };
   }, [id]);
 
+  /* The student as it stands now, e.g. after an approval; not onto another student's page opened meanwhile. */
+  const reload = async () => {
+    try {
+      const res = await api<ApplicantDetail>(`/manage/applicants/${encodeURIComponent(id)}`, { realm: 'manage' });
+      setDetail((cur) => (cur?.account.id === res.data.account.id ? res.data : cur));
+    } catch {
+      /* what is shown stays */
+    }
+  };
+
   const loadHistory = useCallback(() => {
     setHistoryFailed(false);
     api<FollowUp[]>(`/manage/applicants/${encodeURIComponent(id)}/follow-ups`, { realm: 'manage' })
       .then((r) => setHistory(r.data))
       .catch(() => setHistoryFailed(true));
   }, [id]);
+  const loaded = !!detail;
   useEffect(() => {
-    if (detail) loadHistory();
-  }, [detail, loadHistory]);
+    if (loaded) loadHistory();
+  }, [loaded, loadHistory]);
 
   const back = (
     <p className="mt8">
@@ -118,14 +239,13 @@ export default function ApplicantDetailPage() {
 
   const { account, form, display: d, steps, registration: reg } = detail;
   const stage = stageOf(detail);
+  const submitted = stage === 'SUBMITTED';
   const name = [form.first_name, form.last_name].filter(Boolean).join(' ') || account.name;
-  const score = !form.score
-    ? ''
-    : isCgpa(form)
-      ? `${form.score}${form.cgpa_scale ? ` / ${form.cgpa_scale}` : ''}`
-      : form.grading_type === 'PERCENTAGE'
-        ? `${form.score}%`
-        : form.score;
+  const uploaded = detail.documents.filter((x) => x.file);
+  const verified = uploaded.filter((x) => x.verified?.verified);
+  const allVerified = uploaded.length > 0 && verified.length === uploaded.length;
+  /* With the Auditor: can be approved once every uploaded document is verified. */
+  const withAuditor = submitted && !detail.approval?.stage;
   /* What the follow-up dialog needs to know about the student (it is shared with the list). */
   const applicant: Applicant = {
     id: account.id,
@@ -142,60 +262,25 @@ export default function ApplicantDetailPage() {
     submitted_at: steps.submitted_at,
     registration_id: reg?.registration_id ?? null,
     registration_number: reg?.registration_number ?? null,
+    district_id: form.district_id || null,
+    district: d.district ?? null,
+    category: d.caste ?? null,
+    centre: d.centre ?? null,
+    documents: { uploaded: uploaded.length, verified: verified.length },
+    documents_verified: allVerified,
+    final_verified: detail.approval?.stage === 'APPROVED',
     last_activity_at: account.last_login_at ?? account.created_at,
     follow_up: history?.[0] ?? null,
-    /* Not used by the follow-up dialog; approval is done from the list. */
-    can_approve: false,
-    approval: null,
+    can_approve: withAuditor && allVerified,
+    /* Batches are made from the list. */
+    can_batch: false,
+    approval: detail.approval ?? null,
   };
 
-  const basic: Rows = [
-    [L.first_name, form.first_name],
-    [L.last_name, form.last_name],
-    [L.father_name, form.father_name],
-    [L.mother_name, form.mother_name],
-    [L.email, form.email || account.email],
-    [L.date_of_birth, form.date_of_birth ? ddmmyyyy(form.date_of_birth) : ''],
-    [L.gender, d.gender ?? form.gender],
-    [L.marital_status, d.marital_status ?? form.marital_status],
-    [L.aadhaar_number, detail.aadhaar_masked],
-    [L.mobile_number, form.mobile_number || account.mobile_number],
-    [L.alternate_mobile_number, form.alternate_mobile_number],
-    [L.alternate_email, form.alternate_email],
-    [L.religion, d.religion ?? form.religion],
-    [L.caste_id, d.caste],
-    [L.disability_status, form.disability_status],
-    ...(isDisabled(form)
-      ? ([
-          [L.disability_type, form.disability_type],
-          [L.disability_certificate_number, form.disability_certificate_number],
-        ] as Rows)
-      : []),
-  ];
-  const address: Rows = [
-    [L.current_address, form.current_address],
-    [L.permanent_address, form.permanent_address],
-    [L.landmark, form.landmark],
-    [L.district_id, d.district],
-    [L.taluka, d.taluka],
-    [L.pin_code, form.pin_code],
-  ];
-  const course: Rows = [
-    [L.region_id, d.course_centre],
-    [L.centre_id, d.centre],
-    [L.technology, d.technology],
-  ];
-  const qualification: Rows = [
-    [L.education_id, d.education],
-    [L.qualification_name, form.qualification_name],
-    [L.qualification_stream, form.qualification_stream],
-    [L.qualification_board, form.qualification_board],
-    [L.qualification_completed_on, form.qualification_completed_on ? ddmmyyyy(form.qualification_completed_on) : ''],
-    [L.grading_type, GRADING[form.grading_type] ?? form.grading_type],
-    ...(isCgpa(form) ? ([[L.cgpa_scale, form.cgpa_scale]] as Rows) : []),
-    [L.score, score],
-    [L.qualification_class, form.qualification_class],
-  ];
+  /* The form under the fields' current names (an empty email or mobile: the account's). */
+  const rows = viewRows(detail.view_fields ?? fallbackView(form, d, detail.aadhaar_masked), 'en').map((r) =>
+    r.text ? r : { ...r, text: r.key === 'email' ? account.email : r.key === 'mobile_number' ? account.mobile_number : '' },
+  );
   const dates: Rows = [
     ['Account created', fmtDate(account.created_at)],
     ['OTP verified', fmtDate(account.email_verified_at)],
@@ -208,11 +293,39 @@ export default function ApplicantDetailPage() {
   return (
     <ManageShell>
       {back}
+      {flash ? <Notice tone="ok">{flash}</Notice> : null}
       <section className="card">
         <div className="row">
           <h2 style={{ margin: 0 }}>{name}</h2>
           <span className={`badge ${stage}`}>{STAGE_LABEL[stage]}</span>
+          <span className="spacer" />
+          {canEdit && detail.can_edit ? (
+            <Link className="btn ghost sm" to={`/manage/applicants/${encodeURIComponent(account.id)}/edit`}>
+              Edit form
+            </Link>
+          ) : null}
+          {canEdit && withAuditor ? (
+            <button
+              type="button"
+              className={allVerified ? 'btn sm' : 'btn sm locked'}
+              disabled={!allVerified}
+              aria-describedby={allVerified ? undefined : 'approve-why'}
+              onClick={() => {
+                setFlash('');
+                setApproving(true);
+              }}
+            >
+              Approve
+            </button>
+          ) : null}
         </div>
+        {canEdit && withAuditor && !allVerified ? (
+          <p className="approve-why" id="approve-why">
+            {uploaded.length
+              ? `First verify all documents, then approve (${verified.length} of ${uploaded.length} verified).`
+              : 'No document is uploaded yet, so the form cannot be approved.'}
+          </p>
+        ) : null}
         <p className="sub" style={{ margin: '4px 0 0' }}>
           {reg ? (
             <>
@@ -231,28 +344,45 @@ export default function ApplicantDetailPage() {
         <p className="hint" style={{ margin: '4px 0 0' }}>
           <a href={`tel:${account.mobile_number}`}>{account.mobile_number}</a> · <a href={`mailto:${account.email}`}>{account.email}</a>
         </p>
+        {submitted ? (
+          <div className="approval-state" role="group" aria-label="Approval stage">
+            <b>Approval stage</b>
+            <ApprovalStageCell approval={detail.approval ?? null} waiting />
+          </div>
+        ) : null}
         <div className="mt16">
           <Details rows={dates} />
         </div>
       </section>
 
-      <Card title="Basic Details">
-        <Details rows={basic} />
-      </Card>
-      <Card title="Address">
-        <Details rows={address} />
-      </Card>
-      <Card title="Course & Center">
-        <Details rows={course} />
-      </Card>
-      <Card title="Qualification">
-        <Details rows={qualification} />
-      </Card>
+      {submitted ? (
+        <Card title="Approval history">
+          <ApprovalHistory events={detail.history ?? []} />
+        </Card>
+      ) : null}
+      {submitted && detail.edits?.length ? (
+        <Card title="Changes">
+          <Changes edits={detail.edits} />
+        </Card>
+      ) : null}
+      {CARDS.map((title) => {
+        const lines = rows.filter((r) => cardOf(r) === title);
+        return lines.length ? (
+          <Card key={title} title={title}>
+            <Details rows={lines.map((r) => [r.label, r.text])} />
+          </Card>
+        ) : null;
+      })}
       <Card title="Documents">
         {detail.documents.some((d) => d.file) ? (
           <div className="row" style={{ marginBottom: 12 }}>
+            {submitted ? (
+              <b aria-live="polite">
+                {verified.length} of {uploaded.length} documents verified
+              </b>
+            ) : null}
             <span className="muted fs13">
-              {detail.documents.filter((d) => d.file).length} of {detail.documents.length} documents uploaded
+              {uploaded.length} of {detail.documents.length} documents uploaded
             </span>
             <span className="spacer" />
             <button
@@ -280,6 +410,7 @@ export default function ApplicantDetailPage() {
                 <th>Document</th>
                 <th>File</th>
                 <th>Uploaded</th>
+                {submitted ? <th>Verification</th> : null}
                 <th className="doc-actions-cell">
                   <span className="sr-only">Actions</span>
                 </th>
@@ -302,6 +433,31 @@ export default function ApplicantDetailPage() {
                     )}
                   </td>
                   <td className="nowrap">{doc.file ? fmtDate(doc.file.uploaded_at) : '—'}</td>
+                  {submitted ? (
+                    <td>
+                      {doc.file ? (
+                        <DocumentCheckCell
+                          accountId={account.id}
+                          doc={doc}
+                          editable={canEdit && detail.approval?.stage !== 'APPROVED'}
+                          onSaved={(saved) =>
+                            setDetail((cur) =>
+                              cur?.account.id === account.id
+                                ? {
+                                    ...cur,
+                                    documents: cur.documents.map((x) =>
+                                      x.code === doc.code ? { ...x, verified: { verified: saved.verified, at: saved.at, by: saved.by } } : x,
+                                    ),
+                                  }
+                                : cur,
+                            )
+                          }
+                        />
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  ) : null}
                   <td className="doc-actions-cell">
                     {doc.file ? (
                       <div className="file-actions">
@@ -380,6 +536,17 @@ export default function ApplicantDetailPage() {
           </div>
         )}
       </Card>
+      {approving && canEdit ? (
+        <ApproveDialog
+          target={{ kind: 'one', applicant }}
+          onClose={() => setApproving(false)}
+          onDone={(message) => {
+            setApproving(false);
+            setFlash(message);
+            void reload();
+          }}
+        />
+      ) : null}
       {following && canEdit ? <FollowUpDialog applicant={applicant} onClose={() => setFollowing(false)} onSaved={loadHistory} /> : null}
     </ManageShell>
   );

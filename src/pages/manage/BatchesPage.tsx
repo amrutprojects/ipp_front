@@ -2,18 +2,34 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type PageMeta } from '../../api';
 import { fmtDate, Notice } from '../../components/ui';
-import type { Batch } from '../../types';
+import type { Batch, BatchPlace } from '../../types';
 import { ManageShell } from './ManageLayout';
 
 const LIMIT = 25;
 
+/* Where a batch's students can be, in the order it is told; Sent back = to the Auditor. */
+const PLACES: [BatchPlace, string][] = [
+  ['DIVISION', 'Divisional Officer'],
+  ['COEP', 'COEP'],
+  ['HEAD_OFFICE', 'Head Office'],
+  ['ADMIN', 'Admin'],
+  ['APPROVED', 'Final approved'],
+  ['AUDITOR', 'Sent back'],
+];
+/* "Divisional Officer 2 · COEP 27 · Sent back 1" (also used by the batch page). */
+export const batchPlaces = (b: Batch) =>
+  PLACES.filter(([code]) => b.stages[code])
+    .map(([code, label]) => `${label} ${b.stages[code]}`)
+    .join(' · ') || '—';
+
 /*
- * Batches (/manage/batches): groups of finally approved students (Head Office approved) at a Center Master centre.
- * A batch is created from the Applicants list (tick finally approved students → Create batch) and viewed or edited here.
+ * Batches (/manage/batches): groups of students of one district, at a Center Master centre, that go through the approval
+ * stages together. A batch is created from the Applicants list (select students waiting for a batch → Create batch) and is
+ * viewed, or its name and centre changed, here.
  */
 export default function BatchesPage() {
   const [rows, setRows] = useState<Batch[]>([]);
-  const [meta, setMeta] = useState<(PageMeta & { max_size?: number }) | null>(null);
+  const [meta, setMeta] = useState<(PageMeta & { size?: number }) | null>(null);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -29,7 +45,7 @@ export default function BatchesPage() {
       const res = await api<Batch[]>('/manage/batches', { realm: 'manage', query: { page, limit: LIMIT, search: query || undefined } });
       if (id !== latest.current) return;
       setRows(res.data);
-      setMeta((res.meta as PageMeta & { max_size?: number }) ?? null);
+      setMeta((res.meta as PageMeta & { size?: number }) ?? null);
     } catch (e) {
       if (id === latest.current) setError(e instanceof Error ? e.message : 'Could not load the batches');
     } finally {
@@ -57,9 +73,9 @@ export default function BatchesPage() {
         </button>
       </div>
       <p className="hint" style={{ marginTop: -4 }}>
-        To create a batch, tick finally approved students in{' '}
-        <Link to="/manage?approval=UNBATCHED">Applicants (Final approved – not in a batch)</Link> and choose Create batch.
-        {meta?.max_size ? ` A batch holds at most ${meta.max_size} students (Settings → Batch size).` : ''}
+        To create a batch, select students in <Link to="/manage?application_stage=BATCH">Applicants (waiting for a batch)</Link> and choose
+        Create batch.
+        {meta?.size ? ` A batch has exactly ${meta.size} student${meta.size === 1 ? '' : 's'} of one district (Settings → Batch size).` : ''}
       </p>
       {error ? <Notice tone="error">{error}</Notice> : null}
       <div className="toolbar">
@@ -79,17 +95,19 @@ export default function BatchesPage() {
             <tr>
               <th>#</th>
               <th>Batch</th>
+              <th>District</th>
               <th>Centre</th>
               <th>Students</th>
+              <th>Where it is now</th>
+              <th>Rejected</th>
               <th>Created</th>
-              <th>Last changed</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="center muted" style={{ padding: 28 }}>
+                <td colSpan={9} className="center muted" style={{ padding: 28 }}>
                   {loading ? 'Loading…' : query ? 'No batches match.' : 'No batches yet.'}
                 </td>
               </tr>
@@ -100,25 +118,21 @@ export default function BatchesPage() {
                   <td>
                     <b>{b.name}</b>
                   </td>
+                  <td>{b.district?.name ?? '—'}</td>
                   <td>
                     {b.centre.name ?? '—'}
                     {b.centre.code ? <div className="hint mono">{b.centre.code}</div> : null}
                   </td>
-                  <td>
-                    {b.students}
-                    {meta?.max_size ? <span className="hint"> / {meta.max_size}</span> : null}
-                  </td>
+                  <td>{b.students}</td>
+                  <td>{batchPlaces(b)}</td>
+                  <td>{b.rejected ? <span className="badge do-REJECTED">{b.rejected}</span> : '—'}</td>
                   <td className="nowrap">
                     {fmtDate(b.created_at)}
                     {b.created_by ? <div className="hint">{b.created_by}</div> : null}
                   </td>
-                  <td className="nowrap">
-                    {fmtDate(b.updated_at)}
-                    {b.updated_by ? <div className="hint">{b.updated_by}</div> : null}
-                  </td>
                   <td>
                     <Link className="btn ghost sm" to={`/manage/batches/${encodeURIComponent(b.id)}`} aria-label={`View ${b.name}`}>
-                      View / edit
+                      View
                     </Link>
                   </td>
                 </tr>

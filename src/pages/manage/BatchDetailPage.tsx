@@ -1,15 +1,35 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../../api';
-import { Field, fmtDate, Modal, Notice } from '../../components/ui';
+import { Field, fmtDate, Notice } from '../../components/ui';
 import { useCanEdit } from '../../session';
-import type { Applicant, BatchDetail } from '../../types';
+import type { ApplicantDetail, ApprovalEvent, BatchDetail } from '../../types';
+import ApprovalHistory from './ApprovalHistory';
+import ApprovalStageCell from './ApprovalStageCell';
+import { batchPlaces } from './BatchesPage';
 import { useActiveCentres } from './CreateBatchDialog';
 import { ManageShell } from './ManageLayout';
 
+/* A student's whole approval history, loaded when it is opened (GET /manage/applicants/:id). */
+function MemberHistory({ id }: { id: string }) {
+  const [events, setEvents] = useState<ApprovalEvent[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api<ApplicantDetail>(`/manage/applicants/${encodeURIComponent(id)}`, { realm: 'manage' })
+      .then((r) => live && setEvents(r.data.history ?? []))
+      .catch(() => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  if (failed) return <p className="err">Could not load the history. Close and open it again.</p>;
+  return events ? <ApprovalHistory events={events} /> : <p className="muted">Loading…</p>;
+}
+
 /*
- * One batch (/manage/batches/:id): its students, and for an ADMIN account the edits — name and centre, students
- * removed (at least one stays), finally approved students added (in no batch yet; within the batch size).
+ * One batch (/manage/batches/:id): where its students are now, each with the approval stage, a rejection's reason and the
+ * whole history; an ADMIN account can change the name and the centre. The students of a batch are fixed.
  */
 export default function BatchDetailPage() {
   const { id = '' } = useParams();
@@ -23,10 +43,8 @@ export default function BatchDetailPage() {
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
   const [busy, setBusy] = useState(false);
-  const [removing, setRemoving] = useState<Set<string>>(new Set());
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const [available, setAvailable] = useState<Applicant[] | null>(null);
-  const [adding, setAdding] = useState<Set<string>>(new Set());
+  /* The students whose history is open. */
+  const [open, setOpen] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
@@ -39,54 +57,19 @@ export default function BatchDetailPage() {
       setLoadError(e instanceof Error ? e.message : 'Could not load the batch');
     }
   }, [id]);
-  const loadAvailable = useCallback(async () => {
-    if (!canEdit) return;
-    try {
-      const res = await api<Applicant[]>('/manage/applicants', { realm: 'manage', query: { page: 1, limit: 100, approval: 'UNBATCHED' } });
-      setAvailable(res.data.filter((r) => r.can_batch));
-    } catch {
-      setAvailable([]);
-    }
-  }, [canEdit]);
   useEffect(() => {
     void load();
-    void loadAvailable();
-  }, [load, loadAvailable]);
+  }, [load]);
 
-  /* One PATCH: the batch comes back as saved, or the reason it was refused. */
-  const patch = async (body: Record<string, unknown>, message: string) => {
-    setBusy(true);
-    setError('');
-    setDone('');
-    try {
-      const res = await api<BatchDetail>(`/manage/batches/${encodeURIComponent(id)}`, { method: 'PATCH', realm: 'manage', body });
-      setBatch(res.data);
-      setName(res.data.name);
-      setCentreId(res.data.centre.id);
-      setRemoving(new Set());
-      setAdding(new Set());
-      setDone(message);
-      void loadAvailable();
-      return true;
-    } catch (err) {
-      if (err instanceof ApiError) {
-        const fields = err.fields();
-        setErrors({ name: fields.name ?? '', centre_id: fields.centre_id ?? '' });
-        setError(fields.ids ?? fields.remove_ids ?? (err.status === 422 && (fields.name || fields.centre_id) ? 'Please correct the highlighted fields.' : err.message));
-      } else setError('Could not save the batch');
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const saveDetails = (e: FormEvent) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!batch || busy) return;
     const local: Record<string, string> = {};
     if (name.trim().length < 2) local.name = 'Enter a batch name (at least 2 characters)';
     if (!centreId) local.centre_id = 'Choose a centre';
     setErrors(local);
+    setError('');
+    setDone('');
     if (Object.keys(local).length) return;
     const body: Record<string, unknown> = {};
     if (name.trim() !== batch.name) body.name = name.trim();
@@ -95,7 +78,22 @@ export default function BatchDetailPage() {
       setDone('Nothing to save: the name and centre are unchanged.');
       return;
     }
-    void patch(body, 'Batch details saved.');
+    setBusy(true);
+    try {
+      const res = await api<BatchDetail>(`/manage/batches/${encodeURIComponent(id)}`, { method: 'PATCH', realm: 'manage', body });
+      setBatch(res.data);
+      setName(res.data.name);
+      setCentreId(res.data.centre.id);
+      setDone('Batch details saved.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const fields = err.fields();
+        setErrors({ name: fields.name ?? '', centre_id: fields.centre_id ?? '' });
+        setError(err.status === 422 && (fields.name || fields.centre_id) ? 'Please correct the highlighted fields.' : err.message);
+      } else setError('Could not save the batch');
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loadError)
@@ -114,13 +112,13 @@ export default function BatchDetailPage() {
       </ManageShell>
     );
 
-  const room = batch.max_size - batch.members.length;
-  const toggle = (set: Set<string>, setter: (s: Set<string>) => void, key: string) => {
-    const next = new Set(set);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    setter(next);
-  };
+  const toggle = (key: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   /* The centre may be inactive now: it still shows, so the current value stays selectable. */
   const centreOptions = [
     ...(centres ?? []),
@@ -136,13 +134,17 @@ export default function BatchDetailPage() {
       </p>
       <div className="row" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{batch.name}</h2>
+        {batch.rejected ? <span className="badge do-REJECTED">{batch.rejected} rejected</span> : null}
         <span className="spacer" />
         <span className="muted">
-          {batch.members.length} of at most {batch.max_size} students
+          {batch.students} student{batch.students === 1 ? '' : 's'}
         </span>
       </div>
+      <p style={{ margin: '0 0 4px' }}>
+        Where it is now: <b>{batchPlaces(batch)}</b>
+      </p>
       <p className="hint" style={{ marginTop: 0 }}>
-        Centre: <b>{batch.centre.name ?? '—'}</b>
+        District: <b>{batch.district?.name ?? '—'}</b> · Centre: <b>{batch.centre.name ?? '—'}</b>
         {batch.centre.code ? ` (${batch.centre.code})` : ''} · Created {fmtDate(batch.created_at)}
         {batch.created_by ? ` by ${batch.created_by}` : ''} · Last changed {fmtDate(batch.updated_at)}
         {batch.updated_by ? ` by ${batch.updated_by}` : ''}
@@ -155,7 +157,7 @@ export default function BatchDetailPage() {
           <h3 id="batch-details-title" style={{ marginTop: 0 }}>
             Batch details
           </h3>
-          <form onSubmit={saveDetails} noValidate>
+          <form onSubmit={(e) => void save(e)} noValidate>
             <div className="grid">
               <Field id="batch-edit-name" label="Batch name" error={errors.name}>
                 <input id="batch-edit-name" className="inp" maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
@@ -181,137 +183,82 @@ export default function BatchDetailPage() {
         </section>
       ) : null}
 
-      <div className="row" style={{ margin: '18px 0 8px' }}>
-        <h3 style={{ margin: 0 }}>Students in this batch</h3>
-        <span className="spacer" />
-        {canEdit ? (
-          <button className="btn ghost sm" disabled={!removing.size || busy} onClick={() => setConfirmRemove(true)}>
-            Remove selected ({removing.size})
-          </button>
-        ) : null}
-      </div>
+      <h3 style={{ margin: '18px 0 8px' }}>Students in this batch</h3>
       <div className="tbl-wrap">
         <table className="tbl">
           <thead>
             <tr>
-              {canEdit ? <th className="sel-cell" aria-label="Select" /> : null}
               <th>#</th>
               <th>Student</th>
               <th>Mobile</th>
-              <th>District</th>
+              <th>Details</th>
+              <th>Approval stage</th>
               <th>Registration</th>
-              <th>Student register</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {batch.members.map((m, i) => (
-              <tr key={m.id} className={removing.has(m.id) ? 'row-selected' : undefined}>
-                {canEdit ? (
-                  <td className="sel-cell">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${m.name} to remove`}
-                      checked={removing.has(m.id)}
-                      onChange={() => toggle(removing, setRemoving, m.id)}
-                    />
+              <Fragment key={m.id}>
+                <tr>
+                  <td>{i + 1}</td>
+                  <td>
+                    <b>{m.name}</b>
+                    <div className="hint">{m.email}</div>
                   </td>
+                  <td className="nowrap">{m.mobile_number}</td>
+                  <td>
+                    <dl className="row-facts">
+                      <dt>District</dt>
+                      <dd>{m.district ?? '—'}</dd>
+                      <dt>Category</dt>
+                      <dd>{m.category ?? '—'}</dd>
+                      <dt>Centre</dt>
+                      <dd>{m.centre ?? '—'}</dd>
+                      <dt>Documents</dt>
+                      <dd>
+                        <span className={m.documents_verified ? 'badge active' : 'badge'}>{m.documents_verified ? 'Verified' : 'Not verified'}</span>
+                      </dd>
+                    </dl>
+                  </td>
+                  <td>
+                    <ApprovalStageCell approval={m.approval} waiting batch={false} />
+                  </td>
+                  <td className="mono nowrap">{m.registration_id ?? '—'}</td>
+                  <td>
+                    <div className="row-actions">
+                      <Link className="btn ghost sm" to={`/manage/applicants/${encodeURIComponent(m.id)}`} aria-label={`View ${m.name}`}>
+                        View
+                      </Link>
+                      <button
+                        type="button"
+                        className="btn ghost sm"
+                        aria-expanded={open.has(m.id)}
+                        aria-label={`History of ${m.name}`}
+                        onClick={() => toggle(m.id)}
+                      >
+                        {open.has(m.id) ? 'Hide history' : 'History'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {open.has(m.id) ? (
+                  <tr>
+                    <td colSpan={7} className="history-cell">
+                      <MemberHistory id={m.id} />
+                    </td>
+                  </tr>
                 ) : null}
-                <td>{i + 1}</td>
-                <td>
-                  <b>{m.name}</b>
-                  <div className="hint">{m.email}</div>
-                </td>
-                <td className="nowrap">{m.mobile_number}</td>
-                <td>{m.district ?? '—'}</td>
-                <td className="mono nowrap">{m.registration_id ?? '—'}</td>
-                <td className="mono nowrap">{m.register_id ?? '—'}</td>
-              </tr>
+              </Fragment>
             ))}
           </tbody>
         </table>
       </div>
-
-      {canEdit ? (
-        <>
-          <div className="row" style={{ margin: '22px 0 8px' }}>
-            <h3 style={{ margin: 0 }}>Add students</h3>
-            <span className="spacer" />
-            <span className="muted fs13">{room > 0 ? `Room for ${room} more` : 'This batch is full'}</span>
-            <button
-              className="btn sm"
-              disabled={!adding.size || busy || adding.size > room}
-              onClick={() => void patch({ add_ids: [...adding] }, `${adding.size} student${adding.size === 1 ? '' : 's'} added.`)}
-            >
-              Add selected ({adding.size})
-            </button>
-          </div>
-          {adding.size > room ? (
-            <Notice tone="warn">
-              Only {Math.max(room, 0)} more fit (Settings → Batch size is {batch.max_size}). Untick {adding.size - Math.max(room, 0)}.
-            </Notice>
-          ) : null}
-          {available === null ? (
-            <div className="loading">Loading…</div>
-          ) : available.length === 0 ? (
-            <p className="muted">No finally approved student is waiting for a batch.</p>
-          ) : (
-            <div className="tbl-wrap">
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th className="sel-cell" aria-label="Select" />
-                    <th>Student</th>
-                    <th>Mobile</th>
-                    <th>Student register</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {available.map((a) => (
-                    <tr key={a.id} className={adding.has(a.id) ? 'row-selected' : undefined}>
-                      <td className="sel-cell">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${a.name} to add`}
-                          checked={adding.has(a.id)}
-                          onChange={() => toggle(adding, setAdding, a.id)}
-                        />
-                      </td>
-                      <td>
-                        <b>{a.name}</b>
-                        <div className="hint">{a.email}</div>
-                      </td>
-                      <td className="nowrap">{a.mobile_number}</td>
-                      <td className="mono nowrap">{a.approval?.register_id ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      ) : null}
-
-      {confirmRemove ? (
-        <Modal alert title={`Remove ${removing.size} student${removing.size === 1 ? '' : 's'} from ${batch.name}?`} onClose={() => !busy && setConfirmRemove(false)}>
-          <p>They stay finally approved and can be put into another batch. A batch keeps at least one student.</p>
-          <div className="actions">
-            <button className="btn ghost" onClick={() => setConfirmRemove(false)} disabled={busy} data-autofocus>
-              Cancel
-            </button>
-            <button
-              className="btn danger"
-              disabled={busy}
-              onClick={() =>
-                void patch({ remove_ids: [...removing] }, `${removing.size} student${removing.size === 1 ? '' : 's'} removed.`).then(() =>
-                  setConfirmRemove(false),
-                )
-              }
-            >
-              {busy ? 'Removing…' : 'Yes, remove'}
-            </button>
-          </div>
-        </Modal>
-      ) : null}
+      <p className="hint mt16">
+        The students of a batch are fixed. One student can be rejected without stopping the rest: a student sent back to the Auditor is
+        approved again in <Link to="/manage?application_stage=RETURNED">Applicants (sent back)</Link> and goes straight back to the Divisional
+        Officer in this batch.
+      </p>
     </ManageShell>
   );
 }

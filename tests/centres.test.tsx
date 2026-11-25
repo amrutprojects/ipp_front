@@ -48,7 +48,7 @@ function mockApi(opts: { create?: (body: unknown) => Response } = {}) {
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
     calls.push({ method, url, body, auth: (init?.headers as Record<string, string> | undefined)?.Authorization ?? null });
-    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'EDP Admin', email: 'edp.admin@example.com', role: 'ADMIN' } });
+    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'Program Admin', email: 'admin@example.com', role: 'ADMIN' } });
     if (url.includes('/manage/centres?') || (url.endsWith('/manage/centres') && method === 'GET'))
       return json(200, { data: [row], meta: { page: 1, limit: 25, total: 1, totalPages: 1 } });
     if (url.endsWith('/manage/centres') && method === 'POST') return opts.create ? opts.create(body) : json(201, { data: centre({ id: 'c2' }) });
@@ -57,8 +57,6 @@ function mockApi(opts: { create?: (body: unknown) => Response } = {}) {
       return json(200, { data: row });
     }
     if (url.endsWith('/manage/centres/c1')) return json(200, { data: row });
-    if (url.endsWith('/manage/technology-options'))
-      return json(200, { data: [{ code: 'T03', name: 'Web Design & Development' }, { code: 'T05', name: 'Cyber Security' }] });
     if (url.endsWith('/geography/states')) return json(200, { data: [{ id: 's1', code: 'MH', name: 'Maharashtra' }] });
     if (url.endsWith('/geography/states/s1/districts')) return json(200, { data: [{ id: 'd1', code: 'PUN', name: 'Pune' }] });
     if (url.endsWith('/geography/districts/d1/talukas')) return json(200, { data: [{ id: 't1', code: 'HVL', name: 'Haveli' }] });
@@ -96,8 +94,12 @@ describe('Center Master (tracking panel)', () => {
     renderAt('/manage/centres');
     const row = await screen.findByRole('row', { name: /Baramati Centre/ });
     expect(row).toHaveTextContent('PUN-01');
-    expect(row).toHaveTextContent('Web Design & Development, Retired Track (inactive)');
+    /* Technologies depend on the student's district now: not shown with a centre. */
+    expect(row).not.toHaveTextContent('Web Design & Development');
+    expect(screen.queryByRole('columnheader', { name: 'Technologies' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Center Master' })).toHaveAttribute('href', '/manage/centres');
+    /* Under Masters, whose tab is the open one. */
+    expect(screen.getByRole('link', { name: 'Masters' })).toHaveClass('active');
     expect(calls.find((c) => c.url.includes('/manage/centres?'))!.auth).toBe('Bearer manage-token');
 
     await userEvent.click(await within(row).findByRole('button', { name: 'Deactivate Baramati Centre' }));
@@ -128,31 +130,27 @@ describe('Center Master (tracking panel)', () => {
     await userEvent.selectOptions(screen.getByLabelText(/^State/), 's1');
     await waitFor(() => expect(district).toBeEnabled());
     await userEvent.selectOptions(district, 'd1');
-    await userEvent.click(await screen.findByRole('checkbox', { name: /Cyber Security/ }));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Create center' }));
 
     expect(await screen.findByText('A center with this name already exists in the district')).toBeInTheDocument();
-    expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({
-      name: 'Baramati Centre',
-      code: 'PUN-02',
-      stateId: 's1',
-      districtId: 'd1',
-      technologyCodes: ['T05'],
-      isActive: true,
-    });
+    const body = calls.find((c) => c.method === 'POST')!.body;
+    expect(body).toMatchObject({ name: 'Baramati Centre', code: 'PUN-02', stateId: 's1', districtId: 'd1', isActive: true });
+    expect(body).not.toHaveProperty('technologyCodes');
   });
 
-  it('edits a centre: keeps the allocation unless it changes, marks inactive technologies', async () => {
+  it('edits a centre without its technologies', async () => {
     const calls = mockApi();
     renderAt('/manage/centres/c1/edit');
-    expect(await screen.findByRole('checkbox', { name: /Retired Track.*\(inactive\)/ })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /Web Design & Development/ })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /Cyber Security/ })).not.toBeChecked();
+    expect(await screen.findByLabelText(/^Center Name/)).toHaveValue('Baramati Centre');
+    expect(screen.queryByText(/Allocated Technologies/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await screen.findByRole('heading', { name: 'Baramati Centre' });
+    expect(screen.queryByText(/Allocated Technologies/)).not.toBeInTheDocument();
     const patch = calls.find((c) => c.method === 'PATCH')!;
     expect(patch.url).toMatch(/\/manage\/centres\/c1$/);
     expect(patch.body).not.toHaveProperty('technologyCodes');
     expect(patch.body).not.toHaveProperty('isActive');
+    expect(calls.some((c) => c.url.includes('technology-options'))).toBe(false);
   });
 });

@@ -27,14 +27,42 @@ export interface Ref {
   code: string;
   name: string;
 }
-/* A document on step 3, in the order the server lists them; required = is_mandatory. */
+/* DOCUMENT = a scan or a photo; VIDEO = an MP4. */
+export type DocumentKind = 'DOCUMENT' | 'VIDEO';
+/* A document on step 3 (active ones, in order, from the Documents master); required = is_mandatory. */
 export interface DocumentType extends Ref {
+  name_mr?: string | null;
   is_mandatory: boolean;
+  kind?: DocumentKind;
   /* No longer used: the server now sends null for every type; kept for compatibility, nothing renders from it. */
   barcode?: 'required' | 'optional' | null;
-  /* Accepted formats and size, from the server: PDF / JPG / JPEG / PNG up to 5 MB, the Applicant Video MP4 up to 50 MB. */
+  /* Accepted formats and size when the server sends them; otherwise by kind: PDF / JPG / JPEG / PNG up to 5 MB, a video MP4 up to 50 MB. */
   formats?: string[];
   max_mb?: number;
+}
+export type FieldType = 'TEXT' | 'TEXTAREA' | 'NUMBER' | 'DATE' | 'DROPDOWN';
+/* A field of the form as the Form fields master defines it (GET /edp/options → fields: the active ones). */
+export interface FieldConfig {
+  key: string;
+  step: number;
+  label_en: string;
+  label_mr: string | null;
+  required: boolean;
+  type: FieldType;
+  core: boolean;
+  /* An own field, added in the Form fields master. */
+  custom: boolean;
+  order: number;
+  /* The dropdown list its choices come from (FIELD:<key> for an own dropdown); null = none. */
+  options_kind: string | null;
+  help_en: string | null;
+  help_mr: string | null;
+}
+/* A choice of a dropdown list (GET /edp/options → lists): the stored value and its names. */
+export interface ListItem {
+  value: string;
+  name_en: string;
+  name_mr: string | null;
 }
 /* A centre that can be chosen in step 2 (active centres only). */
 export interface CentreOption {
@@ -43,7 +71,7 @@ export interface CentreOption {
   code: string;
   district_name: string;
 }
-/* A technology (approved track, T01–T12) offered at a centre: GET /centres/:centreId/technologies. */
+/* A technology (T01, T02, …); which ones a student may choose depends on the student's district. */
 export interface TechnologyOption {
   code: string;
   name: string;
@@ -68,6 +96,13 @@ export interface Options {
   grading_types: { code: string; name: string }[];
   cgpa_scales: number[];
   qualification_classes: string[];
+  /* From the masters (tracking panel): the active fields in order, the dropdown lists, and the technologies per district. */
+  fields?: FieldConfig[];
+  lists?: Record<string, ListItem[]>;
+  educational_statuses?: { code: string; name: string; name_mr?: string | null }[];
+  technologies?: TechnologyOption[];
+  /* Only districts with a selection; any other district offers every technology. */
+  district_technologies?: Record<string, string[]>;
   /* Contact for queries, shown after submitting: set by the EDP admins on /manage/settings; message may hold {email} / {mobile}. */
   support?: { message: string; email: string | null; mobile: string | null };
   /* The congratulations dialog shown once the account is created, and the Help button's details; both from /manage/settings. */
@@ -145,6 +180,7 @@ export const MAIN_FIELDS = [
   'centre_id',
   'technology',
   'education_id',
+  'educational_status',
   'qualification_name',
   'qualification_stream',
   'qualification_board',
@@ -155,7 +191,19 @@ export const MAIN_FIELDS = [
   'qualification_class',
 ] as const;
 export type FormField = (typeof BASIC_FIELDS)[number] | (typeof MAIN_FIELDS)[number];
-export type Form = Record<FormField, string>;
+/* The known fields, plus the own fields of the Form fields master under their keys (x_…). */
+export type Form = Record<FormField, string> & { [key: string]: string };
+/* The form as every login shows it: active fields in order, plus switched-off ones with a value; text = as people read it. */
+export interface ViewField {
+  key: string;
+  step: number;
+  label_en: string;
+  label_mr: string | null;
+  type: FieldType;
+  value: string | null;
+  text: string | null;
+  custom: boolean;
+}
 
 export interface StoredFile {
   doc_type: string;
@@ -187,6 +235,8 @@ export interface Application {
     aadhaar_masked: string | null;
     display: Record<string, string | null>;
   } | null;
+  /* A submitted form, as every login shows it. */
+  view_fields?: ViewField[];
 }
 
 export interface Submitted {
@@ -228,33 +278,74 @@ export interface Applicant {
   submitted_at: string | null;
   registration_id: string | null;
   registration_number: string | null;
+  /* From the form; null = not filled yet. district_id: a batch is made of students of one district. */
+  district_id: string | null;
+  district: string | null;
+  category: string | null;
+  centre: string | null;
+  /* Uploaded documents, and how many of them the Auditor verified. */
+  documents: { uploaded: number; verified: number };
+  /* Every uploaded document is verified. */
+  documents_verified: boolean;
+  /* Finally approved (by Admin). */
+  final_verified: boolean;
   last_activity_at: string;
   /* The latest follow-up; null = not followed up yet. */
   follow_up: FollowUp | null;
-  /* Submitted and with the Auditor (not approved yet, or sent back): the panel can approve it (to the Divisional Officer). */
+  /*
+   * Submitted, with the Auditor (not approved yet, or sent back) and every uploaded document verified: the panel can
+   * approve it. It then waits for a batch; a sent back student who is already in a batch goes straight back to the
+   * Divisional Officer in that batch.
+   */
   can_approve: boolean;
-  /* Finally approved (Head Office) and in no batch yet: it can be put into a batch. */
-  can_batch?: boolean;
+  /* Approved by the Auditor and waiting for a batch (stage BATCH, in no batch): it can be put into one. */
+  can_batch: boolean;
   approval: Approval | null;
 }
 
 /*
- * Approval stages (amrut-kalash-api EDP_APPROVAL_STAGES): after the Auditor (this panel) approves, Divisional Officer →
- * COEP → Head Office; APPROVED = final (then in the student register). A rejection sends the student back one stage.
+ * Approval stages (amrut-kalash-api EDP_APPROVAL_STAGES): after the Auditor (this panel) approves, the form waits for a
+ * batch (BATCH); the batch goes to the Divisional Officer (of its district) → COEP → Head Office (skipped while its
+ * approval is optional) → Admin; APPROVED = final (then in the student register). A rejection sends the one student back
+ * one stage, still in the same batch.
  */
-export type ApprovalStage = 'DIVISION' | 'COEP' | 'HEAD_OFFICE' | 'APPROVED';
+export type ApprovalStage = 'BATCH' | 'DIVISION' | 'COEP' | 'HEAD_OFFICE' | 'ADMIN' | 'APPROVED';
 export type StagePoint = 'AUDITOR' | ApprovalStage;
-/* The list's approval filter: with the Auditor (RETURNED = sent back), a stage, or UNBATCHED (final, no batch yet). */
-export type ApprovalFilter = 'AWAITING' | 'RETURNED' | ApprovalStage | 'UNBATCHED';
-export const APPROVAL_FILTER_LABEL: Record<ApprovalFilter, string> = {
-  AWAITING: 'Not approved yet (with Auditor)',
-  RETURNED: 'Sent back to Auditor',
-  DIVISION: 'With Divisional Officer',
-  COEP: 'With COEP',
-  HEAD_OFFICE: 'With Head Office',
-  APPROVED: 'Final approved',
-  UNBATCHED: 'Final approved – not in a batch',
-};
+/* The summary's approval counts: with the Auditor (RETURNED = of those, sent back), or at a stage. */
+export type ApprovalFilter = 'AWAITING' | 'RETURNED' | ApprovalStage;
+
+/*
+ * The list's "Stage of application" filter: how far the form got, then whom it is with (AUDITOR = submitted and waiting
+ * for the Auditor, RETURNED = of those, sent back by the Divisional Officer; BATCH = approved, waiting for a batch).
+ */
+export const APPLICATION_STAGES = [
+  'OTP_PENDING',
+  'VERIFIED',
+  'BASIC_DONE',
+  'MAIN_DONE',
+  'AUDITOR',
+  'RETURNED',
+  'BATCH',
+  'DIVISION',
+  'COEP',
+  'HEAD_OFFICE',
+  'ADMIN',
+  'APPROVED',
+] as const;
+export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
+/* The Documents and Final verification filters. */
+export type VerifiedFilter = 'VERIFIED' | 'NOT_VERIFIED';
+export interface FilterChoice {
+  id: string;
+  name: string;
+}
+/* GET /manage/filters: the choices of the list's dropdown filters. */
+export interface ListFilterOptions {
+  districts: FilterChoice[];
+  categories: FilterChoice[];
+  centres: FilterChoice[];
+  stages: { code: ApplicationStage; label: string }[];
+}
 export interface ApprovalEvent {
   action: 'APPROVE' | 'REJECT';
   from: { stage: StagePoint; name: string };
@@ -276,15 +367,27 @@ export interface Approval {
   last_event: ApprovalEvent | null;
   /* Finally approved: the student's record in the student register (REG-000123). */
   register_id: string | null;
+  /* The batch the student is in (it stays the same when the student is sent back). */
   batch: { id: string; name: string } | null;
 }
 
-/* Batches (/manage/batches): finally approved students at a Center Master centre, at most the batch size. */
+/*
+ * Batches (/manage/batches): exactly the batch size of students of one district, at a Center Master centre. Making one
+ * sends it to the Divisional Officer; from then on its students are fixed, and every stage approves it batch by batch.
+ */
+export type BatchPlace = Exclude<StagePoint, 'BATCH'>;
 export interface Batch {
   id: string;
   name: string;
   centre: { id: string; name: string | null; code: string | null };
+  district: { id: string; name: string } | null;
   students: number;
+  /* The batch size it was made with. */
+  size: number;
+  /* How many of its students are at each stage now; AUDITOR = sent back to the Auditor. */
+  stages: Record<BatchPlace, number>;
+  /* Students whose latest move was a rejection, not approved again yet. */
+  rejected: number;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -298,11 +401,34 @@ export interface BatchMember {
   registration_id: string | null;
   register_id: string | null;
   district: string | null;
+  category: string | null;
+  centre: string | null;
+  documents_verified: boolean;
+  final_verified: boolean;
+  approval: Approval | null;
 }
 export interface BatchDetail extends Batch {
-  /* The batch size setting (the most students a batch may hold). */
-  max_size: number;
   members: BatchMember[];
+}
+/* GET / PUT /manage/settings/batch: the exact number of students of a new batch. */
+export interface BatchSettings extends SavedMeta {
+  size: number;
+}
+/* The Auditor's verification of one uploaded document: who and when. */
+export interface DocumentCheck {
+  verified: boolean;
+  at: string | null;
+  by: string | null;
+}
+/* POST /manage/applicants/:id/documents/:docType/verify. */
+export interface DocumentCheckSaved extends DocumentCheck {
+  documents: { uploaded: number; verified: number };
+}
+/* A change the Auditor made to a submitted form: the fields, as shown (Aadhaar masked). */
+export interface FormEdit {
+  at: string;
+  by: string | null;
+  changes: { key: string; label: string; from: string | null; to: string | null }[];
 }
 /* One student in the tracking panel: GET /manage/applicants/:id (account id). */
 export interface ApplicantDetail {
@@ -328,8 +454,27 @@ export interface ApplicantDetail {
       string | null
     >
   >;
-  /* The portal's documents, in order. */
-  documents: { code: string; name: string; required: boolean; file: StoredFile | null }[];
+  /* The form as every login shows it (labels and texts from the masters). */
+  view_fields?: ViewField[];
+  /* The active documents in order, plus any other with a file. */
+  documents: {
+    code: string;
+    name: string;
+    name_mr?: string | null;
+    required: boolean;
+    kind?: DocumentKind;
+    file: StoredFile | null;
+    verified: DocumentCheck | null;
+  }[];
+  /* What the Auditor changed on the submitted form, newest first. */
+  edits: FormEdit[];
+  /* The Auditor may change the form (submitted, not finally approved), except these fields. */
+  can_edit: boolean;
+  locked_fields: string[];
+  /* As in the list; null before submission. */
+  approval: Approval | null;
+  /* Every approval and rejection, newest first. */
+  history: ApprovalEvent[];
 }
 export interface Summary {
   total: number;
@@ -337,8 +482,59 @@ export interface Summary {
   stages: { code: Stage; label: string; count: number }[];
   /* Students per current follow-up status; NONE = not followed up yet. */
   follow_ups: Record<FollowUpStatus | 'NONE', number>;
-  /* Students per approval filter (see ApprovalFilter). Absent from an older API. */
+  /* Students per approval status (see ApprovalFilter). Absent from an older API. */
   approvals?: Partial<Record<ApprovalFilter, number>>;
+}
+
+/* ---------- Masters (the tracking panel's /manage/masters) ---------- */
+
+/* GET /manage/masters: the dropdown lists. stored_as: what the form stores (its code, or the linked master's id). */
+export interface MasterKind {
+  kind: string;
+  name: string;
+  count: number;
+  active: number;
+  can_add: boolean;
+  can_delete: boolean;
+  stored_as: 'code' | 'master';
+}
+/* GET /manage/masters/:kind: one choice. */
+export interface MasterOption {
+  id: string;
+  value: string;
+  code: string;
+  name_en: string;
+  name_mr: string | null;
+  order: number;
+  is_active: boolean;
+  /* Cannot be deleted. */
+  is_system: boolean;
+  in_use: boolean | number;
+}
+/* GET /manage/technologies/districts; all = every active technology (nothing selected). */
+export interface DistrictTechnologies {
+  district_id: string;
+  district: string;
+  all: boolean;
+  codes: string[];
+}
+/* GET /manage/documents. */
+export interface MasterDocument {
+  id: string;
+  code: string;
+  name_en: string;
+  name_mr: string | null;
+  required: boolean;
+  is_active: boolean;
+  is_system: boolean;
+  kind: DocumentKind;
+  order: number;
+  in_use: boolean | number;
+}
+/* GET /manage/fields (all of them, active or not). */
+export interface MasterField extends FieldConfig {
+  id: string;
+  is_active: boolean;
 }
 
 /* Center Master (the tracking panel's /manage/centres; the same shape as in the Kalash admin panel). */
@@ -369,7 +565,7 @@ export interface Centre {
   contactPerson: string | null;
   contactNumber: string | null;
   email: string | null;
-  /* Allocated technologies, T01→T12. */
+  /* No longer used: the technologies a student may choose depend on the student's district (Masters → Technologies). */
   technologies: CentreTechnology[];
   isActive: boolean;
   createdAt: string;

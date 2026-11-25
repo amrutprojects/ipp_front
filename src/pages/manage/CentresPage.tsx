@@ -5,16 +5,17 @@ import { Notice } from '../../components/ui';
 import { useCanEdit } from '../../session';
 import type { Centre } from '../../types';
 import CentreStatusDialog from './CentreStatusDialog';
-import { ManageShell } from './ManageLayout';
+import { MastersShell } from './ManageLayout';
 
 const LIMIT = 25;
 
-/* Technologies of a row: the first few names, then "+N more". */
-function technologySummary(c: Centre): string {
-  if (!c.technologies.length) return '—';
-  const names = c.technologies.map((x) => (x.usable ? x.name : `${x.name} (inactive)`));
-  return names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3} more` : names.join(', ');
-}
+/* A centre's own technologies are no longer used: they depend on the student's district (Masters → Technologies). */
+// /* Technologies of a row: the first few names, then "+N more". */
+// function technologySummary(c: Centre): string {
+//   if (!c.technologies.length) return '—';
+//   const names = c.technologies.map((x) => (x.usable ? x.name : `${x.name} (inactive)`));
+//   return names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3} more` : names.join(', ');
+// }
 
 /* Center Master list: search, status filter, pages; view / edit / activate / deactivate. No delete here. */
 export default function CentresPage() {
@@ -68,7 +69,7 @@ export default function CentresPage() {
   }, [search]);
 
   return (
-    <ManageShell wide>
+    <MastersShell>
       <div className="row" style={{ marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>Center Master</h2>
         <span className="spacer" />
@@ -116,7 +117,9 @@ export default function CentresPage() {
               <th>Name</th>
               <th>Code</th>
               <th>District</th>
+              {/* Technologies depend on the student's district.
               <th>Technologies</th>
+              */}
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -124,7 +127,7 @@ export default function CentresPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="center muted" style={{ padding: 28 }}>
+                <td colSpan={6} className="center muted" style={{ padding: 28 }}>
                   {loading ? 'Loading…' : 'No centers match.'}
                 </td>
               </tr>
@@ -137,7 +140,9 @@ export default function CentresPage() {
                   </td>
                   <td className="mono nowrap">{c.code}</td>
                   <td>{c.districtName}</td>
+                  {/* Technologies depend on the student's district.
                   <td className="fs13">{technologySummary(c)}</td>
+                  */}
                   <td>
                     <span className={`badge ${c.isActive ? 'active' : 'inactive'}`}>{c.isActive ? 'Active' : 'Inactive'}</span>
                   </td>
@@ -183,8 +188,8 @@ export default function CentresPage() {
         </div>
       ) : null}
       <p className="hint mt16">
-        Centers are shared with the Amrut admin panel (Center Master). Only active centers, with their active technologies, are offered
-        to students in the registration form.
+        Centers are shared with the Amrut admin panel (Center Master). Only active centers are offered to students in the registration
+        form. The technologies a student can choose depend on the student&apos;s district (Technologies).
       </p>
       {toggling && canEdit ? (
         <CentreStatusDialog
@@ -196,6 +201,6 @@ export default function CentresPage() {
           }}
         />
       ) : null}
-    </ManageShell>
+    </MastersShell>
   );
 }

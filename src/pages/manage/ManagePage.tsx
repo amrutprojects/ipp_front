@@ -3,85 +3,26 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, type PageMeta } from '../../api';
 import { fmtDate, Footer, Notice } from '../../components/ui';
 import {
-  APPROVAL_FILTER_LABEL,
+  APPLICATION_STAGES,
   FOLLOW_UP_STATUS,
   type Applicant,
-  type ApprovalFilter,
+  type ApplicationStage,
   type FollowUpStatus,
-  type Stage,
+  type ListFilterOptions,
   type Summary,
 } from '../../types';
 import { useCanEdit } from '../../session';
+import ApprovalStageCell from './ApprovalStageCell';
 import ApproveDialog, { type ApproveTarget } from './ApproveDialog';
-import CreateBatchDialog from './CreateBatchDialog';
+import { addPicks, pickBlocked, toPick, type BatchPick } from './batchPicks';
+import CreateBatchDialog, { useBatchSize } from './CreateBatchDialog';
 import FollowUpDialog from './FollowUpDialog';
 import { ManageHeader, ManageNav } from './ManageLayout';
+import StudentFilters, { NO_FILTERS, type ListFilters } from './StudentFilters';
 
 const LIMIT = 25;
-
-/*
- * Approval stage: after the Auditor (this panel) approves a submitted form, Divisional Officer → COEP → Head Office
- * (Admin Panel → Student Approval Stages) each approve or reject it. A rejection sends the student back one stage,
- * with the reason shown here; Head Office's approval is final (student register, then a batch).
- */
-function ApprovalStageCell({ r }: { r: Applicant }) {
-  const a = r.approval;
-  const ev = a?.last_event ?? null;
-  const returned = ev?.action === 'REJECT' ? ev : null;
-  if (!a?.stage) {
-    if (returned)
-      return (
-        <div className="do-cell">
-          <span className="badge do-REJECTED">Sent back to Auditor</span>
-          <div className="do-reason">
-            <b>{returned.from.name}:</b> {returned.reason}
-          </div>
-          <div className="hint">
-            {fmtDate(returned.at)}
-            {returned.by ? ` · ${returned.by}` : ''}
-          </div>
-        </div>
-      );
-    return <span className="muted fs13">{r.can_approve ? 'Not approved yet' : '—'}</span>;
-  }
-  return (
-    <div className="do-cell">
-      <span className={`badge do-${a.stage === 'APPROVED' ? 'APPROVED' : 'PENDING'}`}>{a.stage_label}</span>
-      {returned ? (
-        <div className="do-reason">
-          <b>Sent back by {returned.from.name}:</b> {returned.reason}
-        </div>
-      ) : null}
-      {a.stage === 'APPROVED' ? (
-        <>
-          {a.register_id ? (
-            <div className="do-register">
-              Student register: <b className="mono">{a.register_id}</b>
-            </div>
-          ) : null}
-          <div className={a.batch ? 'do-register' : 'hint'}>
-            {a.batch ? (
-              <>
-                Batch: <Link to={`/manage/batches/${encodeURIComponent(a.batch.id)}`}>{a.batch.name}</Link>
-              </>
-            ) : (
-              'Not in a batch yet'
-            )}
-          </div>
-        </>
-      ) : null}
-      {ev ? (
-        <div className="hint">
-          {ev.action === 'APPROVE' ? `Approved by ${ev.from.name}` : `Returned by ${ev.from.name}`}
-          {ev.by ? ` (${ev.by})` : ''} · {fmtDate(ev.at)}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/* A row that can be ticked: the Auditor can approve it, or it is finally approved and in no batch. */
-const selectable = (r: Applicant) => r.can_approve || !!r.can_batch;
+/* What is typed into the search and the text filters, as applied (once typing stops). */
+const NO_TEXT = { search: '', name: '', mobile: '' };
 
 /* A phone with an arrow: "follow up this student". */
 function FollowUpIcon() {
@@ -100,27 +41,32 @@ export default function ManagePage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<Applicant[]>([]);
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [stage, setStage] = useState<Stage | ''>('');
-  const [followUp, setFollowUp] = useState<FollowUpStatus | 'NONE' | ''>('');
-  /* ?approval=UNBATCHED (from Batches) opens the list on that filter. */
+  /* ?application_stage=BATCH (from Batches) opens the list on that stage. */
   const [params] = useSearchParams();
-  const [approval, setApproval] = useState<ApprovalFilter | ''>(() => {
-    const v = params.get('approval');
-    return v && v in APPROVAL_FILTER_LABEL ? (v as ApprovalFilter) : '';
+  const [filters, setFilters] = useState<ListFilters>(() => {
+    const v = params.get('application_stage') as ApplicationStage | null;
+    return v && APPLICATION_STAGES.includes(v) ? { ...NO_FILTERS, stage: v } : NO_FILTERS;
   });
+  /* The choices of the filters; null = not loaded. */
+  const [options, setOptions] = useState<ListFilterOptions | null>(null);
+  const [optionsFailed, setOptionsFailed] = useState(false);
+  const [followUp, setFollowUp] = useState<FollowUpStatus | 'NONE' | ''>('');
   const [following, setFollowing] = useState<Applicant | null>(null);
   /* The form(s) being approved (one row, or the ticked rows); null = no dialog. */
   const [approving, setApproving] = useState<ApproveTarget | null>(null);
-  /* The finally approved students ticked for a new batch; null = no dialog. */
-  const [batching, setBatching] = useState<Applicant[] | null>(null);
   /* Ticked rows (account ids) for "Approve selected": only submitted forms not approved yet, on the page shown. */
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /* Students ticked for a new batch (approved, waiting for one): kept while the list is paged or filtered. */
+  const [picks, setPicks] = useState<BatchPick[]>([]);
+  const [batching, setBatching] = useState(false);
+  const { size: batchSize, failed: batchSizeFailed, reload: reloadBatchSize } = useBatchSize(canEdit);
   const [done, setDone] = useState('');
   const [search, setSearch] = useState('');
-  const [query, setQuery] = useState('');
+  const [text, setText] = useState(NO_TEXT);
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const { stage, district_id, caste_id, documents, centre_id, final } = filters;
 
   /* Only the newest request's answer is shown (a quicker filter change can overtake an older request). */
   const latest = useRef(0);
@@ -136,10 +82,18 @@ export default function ManagePage() {
           query: {
             page,
             limit: LIMIT,
-            stage: stage || undefined,
+            /* The Submitted tile covers every approval stage; all other stages are stages of application. */
+            stage: stage === 'SUBMITTED' ? stage : undefined,
+            application_stage: stage === 'SUBMITTED' ? undefined : stage || undefined,
+            name: text.name || undefined,
+            district_id: district_id || undefined,
+            caste_id: caste_id || undefined,
+            documents: documents || undefined,
+            mobile: text.mobile || undefined,
+            centre_id: centre_id || undefined,
+            final: final || undefined,
             follow_up: followUp || undefined,
-            approval: approval || undefined,
-            search: query || undefined,
+            search: text.search || undefined,
           },
         }),
       ]);
@@ -152,20 +106,20 @@ export default function ManagePage() {
       setSummary(s.data);
       setRows(list.data);
       /* Keep only ticks still on this page and still waiting for approval. */
-      setSelected((prev) => new Set(list.data.filter((r) => selectable(r) && prev.has(r.id)).map((r) => r.id)));
+      setSelected((prev) => new Set(list.data.filter((r) => r.can_approve && prev.has(r.id)).map((r) => r.id)));
+      /* Of the batch ticks, only a student seen to be no longer waiting for a batch is dropped. */
+      setPicks((prev) => prev.filter((p) => list.data.find((r) => r.id === p.id)?.can_batch !== false));
       setMeta(list.meta ?? null);
     } catch (e) {
       if (id === latest.current) setError(e instanceof Error ? e.message : 'Could not load the list');
     } finally {
       if (id === latest.current) setLoading(false);
     }
-  }, [page, stage, followUp, approval, query]);
-  /* Tickable: a form the Auditor can approve, or a finally approved one in no batch (for Create batch). */
-  const tickable = rows.filter(selectable);
-  const ticked = tickable.filter((r) => selected.has(r.id));
-  const selectedRows = ticked.filter((r) => r.can_approve);
-  const batchRows = ticked.filter((r) => r.can_batch);
-  const allTicked = tickable.length > 0 && ticked.length === tickable.length;
+  }, [page, stage, district_id, caste_id, documents, centre_id, final, followUp, text]);
+  /* A row has one checkbox: for a form the Auditor can approve, or for one that waits for a batch. */
+  const approvable = rows.filter((r) => r.can_approve);
+  const selectedRows = approvable.filter((r) => selected.has(r.id));
+  const picked = new Set(picks.map((p) => p.id));
   const toggle = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -173,17 +127,58 @@ export default function ManagePage() {
       else next.add(id);
       return next;
     });
+  const togglePick = (r: Applicant) => setPicks((prev) => (prev.some((p) => p.id === r.id) ? prev.filter((p) => p.id !== r.id) : [...prev, toPick(r)]));
+  /* Why a student who waits for a batch cannot be ticked now. */
+  const blocked = (r: Applicant) => (canEdit && r.can_batch ? pickBlocked(r, picks, batchSize) : null);
+  /* The checkbox in the heading: the forms to approve; on a page without any, the students waiting for a batch. */
+  const headFor = approvable.length ? 'approve' : 'batch';
+  const withPage = addPicks(rows, picks, batchSize);
+  const pickedHere = rows.some((r) => picked.has(r.id));
+  const allTicked = headFor === 'approve' ? selectedRows.length === approvable.length : pickedHere && withPage.length === picks.length;
+  const toggleAll = () => {
+    if (headFor === 'approve') setSelected(allTicked ? new Set() : new Set(approvable.map((r) => r.id)));
+    else setPicks(allTicked ? picks.filter((p) => !rows.some((r) => r.id === p.id)) : withPage);
+  };
+  const headLabel =
+    headFor === 'approve' ? 'Select every form on this page that can be approved' : 'Select the students on this page for a batch (one district)';
   useEffect(() => {
     void load();
   }, [load]);
-  /* Search after typing stops. */
+  const loadOptions = useCallback(async () => {
+    setOptionsFailed(false);
+    try {
+      const res = await api<ListFilterOptions>('/manage/filters', { realm: 'manage' });
+      setOptions(res.data);
+    } catch {
+      setOptionsFailed(true);
+    }
+  }, []);
   useEffect(() => {
+    void loadOptions();
+  }, [loadOptions]);
+  /* Search, name and mobile: applied after typing stops. */
+  useEffect(() => {
+    const next = { search: search.trim(), name: filters.name.trim(), mobile: filters.mobile };
+    if (next.search === text.search && next.name === text.name && next.mobile === text.mobile) return;
     const t = setTimeout(() => {
-      setQuery(search.trim());
+      setText(next);
       setPage(1);
     }, 400);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, filters.name, filters.mobile, text]);
+  const changeFilters = (patch: Partial<ListFilters>) => {
+    setFilters((f) => ({ ...f, ...patch }));
+    /* The text filters go back to page 1 once they are applied. */
+    if (!('name' in patch) && !('mobile' in patch)) setPage(1);
+  };
+  /* Everything that narrows the list, the search and the follow-up filter included. */
+  const clearFilters = () => {
+    setFilters(NO_FILTERS);
+    setFollowUp('');
+    setSearch('');
+    setText(NO_TEXT);
+    setPage(1);
+  };
 
   /*
    * Closing the dialog returns focus to the row's icon. If a filtered list no longer holds that student, focus goes to the
@@ -222,33 +217,74 @@ export default function ManagePage() {
             </button>
           ) : null}
           {canEdit ? (
-            <button
-              className="btn sm"
-              onClick={() => {
-                setDone('');
-                setBatching(batchRows);
-              }}
-              disabled={!batchRows.length}
-              title={batchRows.length ? 'Put the ticked finally approved students into a new batch' : 'Tick finally approved students (not in a batch) to create a batch'}
-            >
-              Create batch ({batchRows.length})
-            </button>
+            <>
+              <button
+                className="btn ghost sm"
+                aria-pressed={stage === 'BATCH'}
+                onClick={() => changeFilters({ stage: stage === 'BATCH' ? '' : 'BATCH' })}
+                title="Show the approved students who wait for a batch"
+              >
+                Waiting for a batch{summary?.approvals?.BATCH === undefined ? '' : ` (${summary.approvals.BATCH})`}
+              </button>
+              <button
+                className="btn sm"
+                onClick={() => {
+                  setDone('');
+                  setBatching(true);
+                }}
+                disabled={batchSize === null || picks.length !== batchSize}
+                title={
+                  batchSize === null
+                    ? 'The batch size is not loaded'
+                    : `Select exactly ${batchSize} student${batchSize === 1 ? '' : 's'} of one district who wait${batchSize === 1 ? 's' : ''} for a batch`
+                }
+              >
+                Create batch ({picks.length}
+                {batchSize === null ? '' : ` of ${batchSize}`})
+              </button>
+            </>
           ) : null}
-          <button className="btn ghost sm" onClick={() => void load()} disabled={loading}>
+          <button
+            className="btn ghost sm"
+            onClick={() => {
+              void load();
+              if (!options) void loadOptions();
+              reloadBatchSize();
+            }}
+            disabled={loading}
+          >
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
+        {canEdit && batchSizeFailed ? (
+          <Notice tone="warn">Could not load the batch size, so no batch can be created. Choose Refresh to try again.</Notice>
+        ) : null}
+        {canEdit && picks.length ? (
+          <div className="batch-bar" role="group" aria-label="Selected for a batch">
+            <span aria-live="polite">
+              <b>
+                {picks.length} of {batchSize ?? '…'} selected
+              </b>{' '}
+              {batchSize === null
+                ? null
+                : picks.length < batchSize
+                  ? `– select ${batchSize - picks.length} more.`
+                  : picks.length === batchSize
+                    ? '– ready: choose Create batch.'
+                    : `– unselect ${picks.length - batchSize}.`}
+            </span>
+            <span className="hint">A batch has one district: {picks[0]!.district}</span>
+            <span className="spacer" />
+            <button type="button" className="link-btn" onClick={() => setPicks([])}>
+              Clear selection
+            </button>
+          </div>
+        ) : null}
         {error ? <Notice tone="error">{error}</Notice> : null}
         {done ? <Notice tone="ok">{done}</Notice> : null}
         {summary ? (
           <div className="stats" role="group" aria-label="Filter by stage">
-            <button
-              className={stage === '' ? 'stat on' : 'stat'}
-              onClick={() => {
-                setStage('');
-                setPage(1);
-              }}
-            >
+            <button className={stage === '' ? 'stat on' : 'stat'} onClick={() => changeFilters({ stage: '' })}>
               <b>{summary.total}</b>
               <span>All students</span>
             </button>
@@ -256,10 +292,7 @@ export default function ManagePage() {
               <button
                 key={s.code}
                 className={stage === s.code ? 'stat on' : 'stat'}
-                onClick={() => {
-                  setStage(s.code);
-                  setPage(1);
-                }}
+                onClick={() => changeFilters({ stage: s.code })}
                 aria-pressed={stage === s.code}
               >
                 <b>{s.count}</b>
@@ -268,6 +301,14 @@ export default function ManagePage() {
             ))}
           </div>
         ) : null}
+        <StudentFilters
+          value={filters}
+          options={options}
+          failed={optionsFailed}
+          summary={summary}
+          onChange={changeFilters}
+          onClear={clearFilters}
+        />
         <div className="toolbar">
           <input
             className="inp"
@@ -297,24 +338,6 @@ export default function ManagePage() {
               </option>
             ))}
           </select>
-          <select
-            className="inp"
-            style={{ maxWidth: 280 }}
-            aria-label="Filter by approval"
-            value={approval}
-            onChange={(e) => {
-              setApproval(e.target.value as ApprovalFilter | '');
-              setPage(1);
-            }}
-          >
-            <option value="">All approval statuses</option>
-            {Object.entries(APPROVAL_FILTER_LABEL).map(([code, label]) => (
-              <option key={code} value={code}>
-                {label}
-                {summary?.approvals ? ` (${summary.approvals[code as ApprovalFilter]})` : ''}
-              </option>
-            ))}
-          </select>
           <span className="muted">{meta ? `${meta.total} student${meta.total === 1 ? '' : 's'}` : ''}</span>
         </div>
         <div className="tbl-wrap">
@@ -325,17 +348,18 @@ export default function ManagePage() {
                   <th className="sel-cell">
                     <input
                       type="checkbox"
-                      aria-label="Select every form on this page that can be approved or batched"
-                      title="Select every form on this page that can be approved, or put into a batch"
+                      aria-label={headLabel}
+                      title={headLabel}
                       checked={allTicked}
-                      disabled={!tickable.length}
-                      onChange={() => setSelected(allTicked ? new Set() : new Set(tickable.map((r) => r.id)))}
+                      disabled={headFor === 'batch' && !pickedHere && withPage.length === picks.length}
+                      onChange={toggleAll}
                     />
                   </th>
                 ) : null}
                 <th>#</th>
                 <th>Student</th>
                 <th>Mobile</th>
+                <th>Details</th>
                 <th>Stage</th>
                 <th>Approval stage</th>
                 <th>Account created</th>
@@ -351,21 +375,30 @@ export default function ManagePage() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit ? 14 : 13} className="center muted" style={{ padding: 28 }}>
+                  <td colSpan={canEdit ? 15 : 14} className="center muted" style={{ padding: 28 }}>
                     {loading ? 'Loading…' : 'No students match.'}
                   </td>
                 </tr>
               ) : (
                 rows.map((r, i) => (
-                  <tr key={r.id} className={selected.has(r.id) ? 'row-selected' : undefined}>
+                  <tr key={r.id} className={selected.has(r.id) || picked.has(r.id) ? 'row-selected' : undefined}>
                     {canEdit ? (
                       <td className="sel-cell">
-                        {selectable(r) ? (
+                        {r.can_approve ? (
                           <input
                             type="checkbox"
-                            aria-label={r.can_approve ? `Select ${r.name}'s form for approval` : `Select ${r.name} for a batch`}
+                            aria-label={`Select ${r.name}'s form for approval`}
                             checked={selected.has(r.id)}
                             onChange={() => toggle(r.id)}
+                          />
+                        ) : r.can_batch ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${r.name} for a batch`}
+                            title={blocked(r)?.reason}
+                            checked={picked.has(r.id)}
+                            disabled={!!blocked(r)}
+                            onChange={() => togglePick(r)}
                           />
                         ) : null}
                       </td>
@@ -377,10 +410,31 @@ export default function ManagePage() {
                     </td>
                     <td className="nowrap">{r.mobile_number}</td>
                     <td>
+                      <dl className="row-facts">
+                        <dt>District</dt>
+                        <dd>{r.district ?? '—'}</dd>
+                        <dt>Category</dt>
+                        <dd>{r.category ?? '—'}</dd>
+                        <dt>Centre</dt>
+                        <dd>{r.centre ?? '—'}</dd>
+                        <dt>Documents</dt>
+                        <dd>
+                          {r.documents?.uploaded ? (
+                            <span className={r.documents.verified === r.documents.uploaded ? 'badge active' : 'badge'}>
+                              {r.documents.verified}/{r.documents.uploaded} verified
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </dd>
+                      </dl>
+                    </td>
+                    <td>
                       <span className={`badge ${r.stage}`}>{r.stage_label}</span>
                     </td>
                     <td>
-                      <ApprovalStageCell r={r} />
+                      <ApprovalStageCell approval={r.approval} waiting={r.stage === 'SUBMITTED'} />
+                      {blocked(r)?.show ? <div className="hint">{blocked(r)!.reason}</div> : null}
                     </td>
                     <td className="nowrap">{fmtDate(r.account_created_at)}</td>
                     <td className="nowrap">{fmtDate(r.otp_verified_at)}</td>
@@ -408,6 +462,27 @@ export default function ManagePage() {
                           >
                             Approve
                           </button>
+                        ) : canEdit && r.stage === 'SUBMITTED' && !r.approval?.stage ? (
+                          /* With the Auditor, but not every uploaded document is verified: Approve is there, and locked. */
+                          <div className="approve-locked">
+                            <button
+                              type="button"
+                              className="btn sm locked"
+                              disabled
+                              aria-label={`Approve ${r.name}'s form`}
+                              aria-describedby={`verify-first-${r.id}`}
+                            >
+                              Approve
+                            </button>
+                            <Link
+                              id={`verify-first-${r.id}`}
+                              className="verify-first"
+                              to={`/manage/applicants/${encodeURIComponent(r.id)}`}
+                              aria-label={`Verify the documents of ${r.name} first`}
+                            >
+                              First verify all documents, then approve
+                            </Link>
+                          </div>
                         ) : null}
                         <button
                           type="button"
@@ -453,20 +528,27 @@ export default function ManagePage() {
           </div>
         ) : null}
         <p className="hint mt16">
-          Open a student with View to see the full form and documents. Students who stopped at a step can be contacted from this list;
-          record each call with the follow-up icon.
+          Open a student with View to see the full form, documents and approvals. Students who stopped at a step can be contacted from this
+          list; record each call with the follow-up icon.
         </p>
       </main>
       {following ? (
         <FollowUpDialog applicant={following} onClose={closeFollowUp} onSaved={() => void load()} readOnly={!canEdit} />
       ) : null}
-      {batching ? (
+      {batching && picks.length ? (
         <CreateBatchDialog
-          students={batching}
-          onClose={() => setBatching(null)}
+          students={picks}
+          onClose={(refused) => {
+            setBatching(false);
+            /* Refused (e.g. a student is no longer waiting for a batch): the list shows how things stand now. */
+            if (refused) {
+              void load();
+              reloadBatchSize();
+            }
+          }}
           onDone={(message) => {
-            setBatching(null);
-            setSelected(new Set());
+            setBatching(false);
+            setPicks([]);
             setDone(message);
             void load();
           }}

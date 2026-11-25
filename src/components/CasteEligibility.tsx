@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { listChoices } from '../form';
 import { useLang } from '../i18n';
+import type { Options } from '../types';
 import { loadOptions, Notice } from './ui';
 
 /*
  * Eligibility, shown before the login and the create-account forms: the programme is open to the castes of the Caste
- * master (the same list as the form's Caste dropdown, GET /edp/options). The candidate ticks the confirmation and
+ * master (the same list as the form's Caste dropdown, GET /edp/options), in the chosen language. The candidate ticks the confirmation and
  * proceeds to the form; the confirmation is shared by both pages and remembered for the browser session (tab).
  */
 const CASTE_CONFIRMED_KEY = 'edp.casteConfirmed';
@@ -25,20 +27,21 @@ export function rememberConfirmation(on: boolean) {
 }
 
 export function CasteEligibility({ proceedLabel, onConfirm }: { proceedLabel: string; onConfirm: () => void }) {
-  const { T } = useLang();
-  const [castes, setCastes] = useState<{ id: string; name: string }[] | null>(null);
+  const { lang, T } = useLang();
+  const [options, setOptions] = useState<Options | null>(null);
   const [failed, setFailed] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [search, setSearch] = useState('');
   const load = () => {
     setFailed(false);
     loadOptions()
-      .then((o) => setCastes(o.castes ?? []))
+      .then(setOptions)
       .catch(() => setFailed(true));
   };
   useEffect(load, []);
+  const castes = options ? (listChoices('CASTE', options, lang) ?? []) : null;
   const needle = search.trim().toLowerCase();
-  const shown = (castes ?? []).filter((c) => !needle || c.name.toLowerCase().includes(needle));
+  const shown = (castes ?? []).filter((c) => !needle || c.label.toLowerCase().includes(needle));
 
   return (
     <section className="eligibility" aria-labelledby="eligibility-title">
@@ -86,8 +89,8 @@ export function CasteEligibility({ proceedLabel, onConfirm }: { proceedLabel: st
             ) : null}
             <ul className="caste-chips" aria-label={T('पात्र जाती', 'Eligible castes')}>
               {shown.map((c) => (
-                <li key={c.id} className="caste-chip">
-                  {c.name}
+                <li key={c.value} className="caste-chip">
+                  {c.label}
                 </li>
               ))}
             </ul>

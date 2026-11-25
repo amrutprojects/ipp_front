@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../../api';
 import { Field, Notice, useRemoteList } from '../../components/ui';
-import type { Centre, GeoRef, TechnologyOption } from '../../types';
+import type { Centre, GeoRef } from '../../types';
 import { centreIssues, type CentreForm } from '../../validation';
-import { ManageShell } from './ManageLayout';
+import { MastersShell } from './ManageLayout';
 
 const EMPTY: CentreForm = {
   name: '',
@@ -30,7 +30,8 @@ const fromCentre = (c: Centre): CentreForm => ({
   contactNumber: c.contactNumber ?? '',
   email: c.email ?? '',
 });
-const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+/* A centre's own technologies are no longer asked: they depend on the student's district (Masters → Technologies). */
+// const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 /* Add (/manage/centres/new) or edit (/manage/centres/:id/edit) a centre. */
 export default function CentreFormPage() {
@@ -40,7 +41,7 @@ export default function CentreFormPage() {
   const [centre, setCentre] = useState<Centre | null>(null);
   const [loadError, setLoadError] = useState('');
   const [form, setForm] = useState<CentreForm>(EMPTY);
-  const [technologyCodes, setTechnologyCodes] = useState<string[]>([]);
+  // const [technologyCodes, setTechnologyCodes] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState('');
@@ -54,7 +55,7 @@ export default function CentreFormPage() {
         if (!live) return;
         setCentre(r.data);
         setForm(fromCentre(r.data));
-        setTechnologyCodes(r.data.technologies.map((t) => t.code));
+        // setTechnologyCodes(r.data.technologies.map((t) => t.code));
       })
       .catch((e: Error) => live && setLoadError(e.message || 'Could not load the center'));
     return () => {
@@ -65,14 +66,14 @@ export default function CentreFormPage() {
   const states = useRemoteList<GeoRef>('/geography/states');
   const districts = useRemoteList<GeoRef>(form.stateId ? `/geography/states/${encodeURIComponent(form.stateId)}/districts` : null);
   const talukas = useRemoteList<GeoRef>(form.districtId ? `/geography/districts/${encodeURIComponent(form.districtId)}/talukas` : null);
-  const technologyOptions = useRemoteList<TechnologyOption>('/manage/technology-options', 'manage');
-
-  /* The allocatable technologies, plus any already allocated that can no longer be (marked inactive). */
-  const technologyRows = useMemo(() => {
-    const rows = technologyOptions.items.map((t) => ({ ...t, usable: true }));
-    for (const t of centre?.technologies ?? []) if (!rows.some((r) => r.code === t.code)) rows.push({ ...t, usable: false });
-    return rows;
-  }, [technologyOptions.items, centre]);
+  // const technologyOptions = useRemoteList<TechnologyOption>('/manage/technology-options', 'manage');
+  //
+  // /* The allocatable technologies, plus any already allocated that can no longer be (marked inactive). */
+  // const technologyRows = useMemo(() => {
+  //   const rows = technologyOptions.items.map((t) => ({ ...t, usable: true }));
+  //   for (const t of centre?.technologies ?? []) if (!rows.some((r) => r.code === t.code)) rows.push({ ...t, usable: false });
+  //   return rows;
+  // }, [technologyOptions.items, centre]);
 
   const set = (k: keyof CentreForm) => (v: string) => {
     setForm((f) => {
@@ -86,10 +87,10 @@ export default function CentreFormPage() {
     });
     if (errors[k]) setErrors((e) => ({ ...e, [k]: '' }));
   };
-  const toggleTechnology = (code: string, on: boolean) => {
-    setTechnologyCodes((codes) => (on ? [...codes, code] : codes.filter((x) => x !== code)));
-    setErrors((e) => ({ ...e, technologyCodes: '' }));
-  };
+  // const toggleTechnology = (code: string, on: boolean) => {
+  //   setTechnologyCodes((codes) => (on ? [...codes, code] : codes.filter((x) => x !== code)));
+  //   setErrors((e) => ({ ...e, technologyCodes: '' }));
+  // };
 
   /* A saved state / district / taluka that is no longer active still shows as chosen. */
   const withCurrent = (items: GeoRef[], idValue: string, name: string | null | undefined) =>
@@ -99,7 +100,7 @@ export default function CentreFormPage() {
   const talukaItems = withCurrent(talukas.items, form.talukaId, centre?.talukaId === form.talukaId ? centre?.talukaName : null);
 
   const save = async () => {
-    const local = centreIssues(form, technologyCodes.length);
+    const local = centreIssues(form);
     setErrors(local);
     if (Object.keys(local).length) {
       setFailure('Please correct the highlighted fields.');
@@ -120,8 +121,8 @@ export default function CentreFormPage() {
       contactNumber: blank(form.contactNumber),
       email: blank(form.email),
     };
-    /* On edit, technologyCodes replaces the allocation: sent only when it was changed. */
-    if (!editing || !sameSet(technologyCodes, centre?.technologies.map((t) => t.code) ?? [])) body.technologyCodes = technologyCodes;
+    // /* On edit, technologyCodes replaces the allocation: sent only when it was changed. */
+    // if (!editing || !sameSet(technologyCodes, centre?.technologies.map((t) => t.code) ?? [])) body.technologyCodes = technologyCodes;
     if (!editing) body.isActive = isActive;
     try {
       const res = await api<Centre>(editing ? `/manage/centres/${encodeURIComponent(id!)}` : '/manage/centres', {
@@ -178,7 +179,7 @@ export default function CentreFormPage() {
   const ready = !editing || !!centre;
 
   return (
-    <ManageShell>
+    <MastersShell wide={false}>
       <p className="mt8">
         <Link to={editing ? `/manage/centres/${id}` : '/manage/centres'}>← {editing ? 'Back to the center' : 'Back to Center Master'}</Link>
       </p>
@@ -285,6 +286,7 @@ export default function CentreFormPage() {
                   </select>
                 </div>
               ) : null}
+              {/* A centre's own technologies are no longer asked: they depend on the student's district.
               <fieldset className="field wide radios" aria-describedby={errors.technologyCodes ? 'c-technologyCodes-err' : 'c-technologyCodes-hint'}>
                 <legend className="label">Allocated Technologies ({technologyCodes.length} selected)</legend>
                 {technologyOptions.status === 'loading' ? (
@@ -321,6 +323,7 @@ export default function CentreFormPage() {
                   </span>
                 )}
               </fieldset>
+              */}
             </div>
             <div className="actions">
               <Link className="btn ghost" to={editing ? `/manage/centres/${id}` : '/manage/centres'}>
@@ -333,6 +336,6 @@ export default function CentreFormPage() {
           </form>
         </section>
       ) : null}
-    </ManageShell>
+    </MastersShell>
   );
 }

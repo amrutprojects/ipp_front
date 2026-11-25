@@ -3,19 +3,22 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import ApplicationPage from '../src/pages/ApplicationPage';
 import { SessionProvider } from '../src/session';
-import type { Application, Form, Options } from '../src/types';
+import type { Application, Form, FormField, Options } from '../src/types';
 
 const OPTIONS: Options = {
   regions: [{ id: 'r1', code: 'PUN', name: 'Pune' }],
   castes: [{ id: 'c1', code: 'C1', name: 'मराठी' }],
   educations: [{ id: 'e1', code: 'E1', name: 'B.Com' }],
   religions: ['हिंदू'],
-  tracks: [{ code: 'T03', name: 'Web Design & Development' }],
+  tracks: [
+    { code: 'T03', name: 'Web Design & Development' },
+    { code: 'T05', name: 'Cyber Security' },
+  ],
   document_types: [{ id: 'd1', code: 'PHOTO', name: 'Photo', is_mandatory: true, barcode: null }],
   support: {
     message: 'If you have any query related to your registration, you can contact us on email ID {email} or mobile number {mobile}.',
-    email: 'edp.help@example.com',
-    mobile: '+91 80103 85237',
+    email: 'help@example.com',
+    mobile: '+91 90000 00000',
   },
   genders: ['Male', 'Female', 'Transgender'],
   marital_statuses: ['Unmarried', 'Married'],
@@ -31,12 +34,6 @@ const OPTIONS: Options = {
   ],
   cgpa_scales: [4, 5, 10],
   qualification_classes: ['Distinction', 'First Class', 'Higher Second Class', 'Second Class', 'Pass Class'],
-};
-/* The dependent list: a centre's technologies (the taluka is typed, so it has no list). */
-const TECHNOLOGIES: Record<string, { code: string; name: string }[]> = {
-  cen1: [{ code: 'T03', name: 'Web Design & Development' }],
-  cen2: [{ code: 'T05', name: 'Cyber Security' }],
-  cen3: [],
 };
 const FORM: Form = {
   first_name: 'Kavya',
@@ -66,6 +63,7 @@ const FORM: Form = {
   centre_id: 'cen1',
   technology: 'T03',
   education_id: 'e1',
+  educational_status: '',
   qualification_name: 'B.Com',
   qualification_stream: 'Accountancy',
   qualification_board: 'Savitribai Phule Pune University',
@@ -97,7 +95,7 @@ const submitted = (app: Application): Application => ({
   submitted_files: app.draft_files,
   draft_files: [],
   registration: {
-    registration_id: 'EDP-000009',
+    registration_id: 'IPP-000009',
     registration_number: '1024170019401327',
     status: 'SUBMITTED',
     aadhaar_masked: 'XXXX-XXXX-2463',
@@ -117,8 +115,6 @@ function mockApi(
     submit?: () => Promise<Response>;
     autosaveFails?: boolean;
     options?: Options;
-    /* Answers a centre's technologies itself (e.g. late, to answer out of order); undefined = the default answer. */
-    technologies?: (centreId: string) => Promise<Response> | undefined;
   } = {},
 ) {
   let app = start;
@@ -131,12 +127,6 @@ function mockApi(
     if (url.endsWith('/edp/me')) return json(200, { data: { id: 'a1', first_name: 'Kavya', last_name: 'Jadhav', email: 'kavya@example.com' } });
     if (url.endsWith('/edp/options')) return json(200, { data: opts.options ?? OPTIONS });
     if (url.endsWith('/edp/application') && method === 'GET') return json(200, { data: app });
-    const tech = /\/edp\/centres\/([^/]+)\/technologies$/.exec(url);
-    if (tech) {
-      const answer = opts.technologies?.(tech[1]!);
-      if (answer) return answer;
-      return TECHNOLOGIES[tech[1]!] ? json(200, { data: TECHNOLOGIES[tech[1]!] }) : json(404, { message: 'Center not found or inactive' });
-    }
     if (url.includes('/application/steps/') && method === 'PUT') {
       const step = Number(url.split('/').pop());
       const complete = (body as { complete: boolean }).complete;
@@ -154,7 +144,7 @@ function mockApi(
     if (url.endsWith('/application/submit')) {
       if (opts.submit) return opts.submit();
       app = submitted(app);
-      return json(201, { data: { registration_id: 'EDP-000009', registration_number: '1024170019401327', status: 'SUBMITTED' } });
+      return json(201, { data: { registration_id: 'IPP-000009', registration_number: '1024170019401327', status: 'SUBMITTED' } });
     }
     return json(404, { message: 'not mocked' });
   });
@@ -205,7 +195,7 @@ describe('Save & Next asks first', () => {
     mockApi(draft({ form: { ...FORM, father_name: '' } }));
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: 'Save & Next →' }));
-    expect(screen.getByText('Father name is required')).toBeInTheDocument();
+    expect(screen.getByText('Father Name is required')).toBeInTheDocument();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 });
@@ -257,7 +247,7 @@ describe('Final submission: preview, then "are you sure"', () => {
     await userEvent.click(within(confirm).getByRole('button', { name: 'Yes, submit' }));
     await waitFor(() => expect(calls.some((c) => c.url.endsWith('/application/submit'))).toBe(true));
     expect(calls.find((c) => c.url.endsWith('/application/submit'))!.body).toEqual({ declaration_accepted: true });
-    expect(await screen.findByText(/Your form has been submitted successfully. Registration ID: EDP-000009/)).toBeInTheDocument();
+    expect(await screen.findByText(/Your form has been submitted successfully. Registration ID: IPP-000009/)).toBeInTheDocument();
     expect(calls.filter((c) => c.url.endsWith('/application/submit'))).toHaveLength(1);
   });
 
@@ -327,8 +317,8 @@ describe('Final submission: when things go wrong', () => {
     await userEvent.keyboard('{Escape}');
     expect(screen.getByRole('alertdialog', { name: 'Submit your form?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'No, go back' })).toBeDisabled();
-    finish(json(201, { data: { registration_id: 'EDP-000010', registration_number: '1', status: 'SUBMITTED' } }));
-    expect(await screen.findByText(/Registration ID: EDP-000010/)).toBeInTheDocument();
+    finish(json(201, { data: { registration_id: 'IPP-000010', registration_number: '1', status: 'SUBMITTED' } }));
+    expect(await screen.findByText(/Registration ID: IPP-000010/)).toBeInTheDocument();
     expect(calls.filter((c) => c.url.endsWith('/application/submit'))).toHaveLength(1);
   });
 
@@ -351,7 +341,7 @@ describe('A submitted form is final', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Your registration' })).toBeInTheDocument();
     expect(screen.getByText(/The submission is final; the form cannot be changed\./)).toBeInTheDocument();
-    expect(screen.getByText('EDP-000009')).toBeInTheDocument();
+    expect(screen.getByText('IPP-000009')).toBeInTheDocument();
     expect(screen.getByText('photo.pdf')).toBeInTheDocument();
     expect(screen.getByText('Submitted', { selector: 'dd' })).toBeInTheDocument();
     /* Nothing is verified yet, so no verification column (no "Pending" badge either). */
@@ -392,23 +382,23 @@ describe('A submitted form is final', () => {
     await renderFreshPage();
     const note = await screen.findByText(/If you have any query related to your registration, you can contact us on/);
     expect(note).toHaveTextContent(
-      'If you have any query related to your registration, you can contact us on email ID edp.help@example.com or mobile number +91 80103 85237.',
+      'If you have any query related to your registration, you can contact us on email ID help@example.com or mobile number +91 90000 00000.',
     );
-    expect(within(note).getByRole('link', { name: 'edp.help@example.com' })).toHaveAttribute('href', 'mailto:edp.help@example.com');
-    expect(within(note).getByRole('link', { name: '+91 80103 85237' })).toHaveAttribute('href', 'tel:+918010385237');
+    expect(within(note).getByRole('link', { name: 'help@example.com' })).toHaveAttribute('href', 'mailto:help@example.com');
+    expect(within(note).getByRole('link', { name: '+91 90000 00000' })).toHaveAttribute('href', 'tel:+919000000000');
   });
 
   it('shows a message without placeholders followed by the contacts that are set', async () => {
-    mockApi(done(), { options: { ...OPTIONS, support: { message: 'Call the EDP office for help.', email: null, mobile: '+91 80103 85237' } } });
+    mockApi(done(), { options: { ...OPTIONS, support: { message: 'Call the program office for help.', email: null, mobile: '+91 90000 00000' } } });
     await renderFreshPage();
-    const note = await screen.findByText(/Call the EDP office for help\./);
-    expect(note).toHaveTextContent('Call the EDP office for help. Mobile: +91 80103 85237');
-    expect(within(note).getByRole('link', { name: '+91 80103 85237' })).toHaveAttribute('href', 'tel:+918010385237');
+    const note = await screen.findByText(/Call the program office for help\./);
+    expect(note).toHaveTextContent('Call the program office for help. Mobile: +91 90000 00000');
+    expect(within(note).getByRole('link', { name: '+91 90000 00000' })).toHaveAttribute('href', 'tel:+919000000000');
     expect(screen.queryByRole('link', { name: /@/ })).not.toBeInTheDocument();
   });
 
   it('shows nothing when the message is empty', async () => {
-    mockApi(done(), { options: { ...OPTIONS, support: { message: '', email: 'edp.help@example.com', mobile: null } } });
+    mockApi(done(), { options: { ...OPTIONS, support: { message: '', email: 'help@example.com', mobile: null } } });
     await renderFreshPage();
     expect(await screen.findByRole('heading', { name: 'Your registration' })).toBeInTheDocument();
     expect(screen.queryByText(/contact/i)).not.toBeInTheDocument();
@@ -435,56 +425,42 @@ describe('Email in the form', () => {
 });
 
 describe('Step 2: center and technology', () => {
-  const step2 = (over: Partial<Form> = {}) =>
+  const step2 = (over: Partial<Record<FormField, string>> = {}) =>
     draft({ current_step: 2, steps: { basic_completed: true, main_completed: false }, form: { ...FORM, ...over } });
   const techSelect = () => screen.getByLabelText(/^Technology/) as HTMLSelectElement;
   const techNames = () => [...techSelect().options].filter((o) => o.value).map((o) => o.text);
 
-  it('changing the center clears the technology at once, saves that, and ignores a late answer for an earlier center', async () => {
-    let finishCen2: (r: Response) => void = () => undefined;
-    const calls = mockApi(step2(), {
-      technologies: (id) => (id === 'cen2' ? new Promise<Response>((res) => (finishCen2 = res)) : undefined),
-    });
+  it('the technology is chosen independently of the center', async () => {
+    const calls = mockApi(step2());
     renderPage();
     await screen.findByRole('heading', { name: 'Step 2 of 3 – Main Form' });
-    await waitFor(() => expect(techNames()).toEqual(['Web Design & Development']));
+    expect(techNames()).toEqual(['Web Design & Development', 'Cyber Security']);
+    await userEvent.selectOptions(screen.getByLabelText(/^Center Name/), 'cen2');
     expect(techSelect().value).toBe('T03');
-
-    const centre = screen.getByLabelText(/^Center Name/);
-    await userEvent.selectOptions(centre, 'cen2');
-    expect(techSelect().value).toBe('');
-    expect(techSelect()).toBeDisabled();
-    expect(within(techSelect()).getByRole('option', { name: 'Loading technologies…' })).toBeInTheDocument();
-
-    /* Back to the first center before the second one's answer arrives; that late answer must not win. */
-    await userEvent.selectOptions(centre, 'cen1');
-    await waitFor(() => expect(techNames()).toEqual(['Web Design & Development']));
-    finishCen2(json(200, { data: [{ code: 'T05', name: 'Cyber Security' }] }));
-    await new Promise((r) => setTimeout(r, 50));
-    expect(techNames()).toEqual(['Web Design & Development']);
-    expect(techSelect().value).toBe('');
-
     await waitFor(
       () => {
         const autosave = calls.filter((c) => c.method === 'PUT' && c.url.endsWith('/steps/2'));
-        expect(autosave.slice(-1)[0]?.body).toMatchObject({ complete: false, data: { centre_id: 'cen1', technology: '' } });
+        expect(autosave.slice(-1)[0]?.body).toEqual({ complete: false, data: { centre_id: 'cen2' } });
       },
       { timeout: 3000 },
     );
+    /* The centre's own technologies are not asked for any more. */
+    expect(calls.some((c) => c.url.includes('/centres/'))).toBe(false);
   });
 
-  it('says so when the center offers no technologies, and keeps the technology disabled', async () => {
-    mockApi(step2({ centre_id: 'cen3', technology: '' }));
-    renderPage();
-    expect(await screen.findByText(/No technologies are currently offered at this center/)).toBeInTheDocument();
-    expect(techSelect()).toBeDisabled();
-  });
-
-  it('on resume, clears a saved technology the center no longer offers, with a warning', async () => {
+  it('on resume, clears a saved technology that is no longer offered, with a warning', async () => {
     mockApi(step2({ technology: 'T12' }));
     renderPage();
-    expect(await screen.findByText(/no longer offered at this center/)).toBeInTheDocument();
+    expect(await screen.findByText(/no longer offered in your district/)).toBeInTheDocument();
     expect(techSelect().value).toBe('');
+  });
+
+  it('on resume, clears a saved center that is no longer active, and keeps the technology', async () => {
+    mockApi(step2({ centre_id: 'gone' }));
+    renderPage();
+    expect(await screen.findByText(/center you chose earlier is no longer available/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Center Name/)).toHaveValue('');
+    expect(techSelect().value).toBe('T03');
   });
 
   it('asks for the CGPA scale only for CGPA and checks the score against it', async () => {
@@ -517,7 +493,7 @@ describe('Step 1: new fields', () => {
     await userEvent.click(within(group).getByRole('radio', { name: 'Yes' }));
     await userEvent.type(screen.getByLabelText(/^Type of Disability/), 'Locomotor');
     await userEvent.click(screen.getByRole('button', { name: 'Save & Next →' }));
-    expect(screen.getByText('Disability certificate number is required')).toBeInTheDocument();
+    expect(screen.getByText('Disability Certificate Number is required')).toBeInTheDocument();
     await userEvent.click(within(group).getByRole('radio', { name: 'No' }));
     expect(screen.queryByLabelText(/^Type of Disability/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Save & Next →' }));
@@ -548,7 +524,7 @@ describe('Step 1: new fields', () => {
     mockApi(draft({ form: { ...FORM, alternate_mobile_number: '12345' } }));
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: 'Save & Next →' }));
-    expect(screen.getByText(/Alternate mobile number must be a 10-digit/)).toBeInTheDocument();
+    expect(screen.getByText(/Alternate Mobile Number must be a 10-digit/)).toBeInTheDocument();
     await userEvent.clear(screen.getByLabelText(/^Alternate Mobile Number/));
     await userEvent.click(screen.getByRole('button', { name: 'Save & Next →' }));
     expect(screen.getByRole('alertdialog', { name: /Save Step 1 of 3/ })).toBeInTheDocument();

@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ApplicantDetailPage from '../src/pages/manage/ApplicantDetailPage';
 import ManagePage from '../src/pages/manage/ManagePage';
 import { SessionProvider } from '../src/session';
-import type { Applicant, ApplicantDetail, Form } from '../src/types';
+import type { Applicant, ApplicantDetail, Approval, ApprovalEvent, Form, FormField, ViewField } from '../src/types';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -22,11 +22,19 @@ const row: Applicant = {
   basic_completed_at: '2026-10-24T11:57:00Z',
   main_completed_at: '2026-10-24T12:10:00Z',
   submitted_at: '2026-10-24T12:30:00Z',
-  registration_id: 'EDP-000001',
+  registration_id: 'IPP-000001',
   registration_number: '1028153012345678',
+  district_id: 'dist1',
+  district: 'Pune',
+  category: 'Maratha',
+  centre: 'Baramati Centre',
+  documents: { uploaded: 1, verified: 0 },
+  documents_verified: false,
+  final_verified: false,
   last_activity_at: '2026-10-25T09:00:00Z',
   follow_up: null,
   can_approve: false,
+  can_batch: false,
   approval: null,
 };
 
@@ -58,6 +66,7 @@ const FORM: Form = {
   centre_id: 'cen1',
   technology: 'T03',
   education_id: 'e1',
+  educational_status: '',
   qualification_name: 'B.Com',
   qualification_stream: 'Accountancy',
   qualification_board: 'Savitribai Phule Pune University',
@@ -68,7 +77,19 @@ const FORM: Form = {
   qualification_class: 'First Class',
 };
 
-const detail = (over: Partial<ApplicantDetail> = {}, form: Partial<Form> = {}): ApplicantDetail => ({
+/* Submitted, with the Auditor. */
+const NOT_APPROVED: Approval = {
+  stage: null,
+  stage_label: null,
+  stage_updated_at: null,
+  approved_at: null,
+  approved_by: null,
+  last_event: null,
+  register_id: null,
+  batch: null,
+};
+
+const detail = (over: Partial<ApplicantDetail> = {}, form: Partial<Record<FormField, string>> = {}): ApplicantDetail => ({
   account: {
     id: ID,
     name: 'Kavya Jadhav',
@@ -80,7 +101,7 @@ const detail = (over: Partial<ApplicantDetail> = {}, form: Partial<Form> = {}): 
   },
   status: 'SUBMITTED',
   steps: { basic_completed_at: '2026-10-24T11:57:00Z', main_completed_at: '2026-10-24T12:10:00Z', submitted_at: '2026-10-24T12:30:00Z' },
-  registration: { registration_id: 'EDP-000001', registration_number: '1028153012345678' },
+  registration: { registration_id: 'IPP-000001', registration_number: '1028153012345678' },
   aadhaar_masked: 'XXXX-XXXX-2463',
   form: { ...FORM, ...form },
   display: {
@@ -101,19 +122,35 @@ const detail = (over: Partial<ApplicantDetail> = {}, form: Partial<Form> = {}): 
       name: 'Photo',
       required: true,
       file: { doc_type: 'PHOTO', name: 'Photo', original_name: 'photo.jpg', mime_type: 'image/jpeg', size_bytes: 2048, uploaded_at: '2026-10-24T12:20:00Z' },
+      verified: { verified: false, at: null, by: null },
     },
-    { code: 'APPLICANT_VIDEO', name: 'Applicant Video with Aadhaar', required: false, file: null },
-    { code: 'PAN_CARD', name: 'PAN Card', required: true, file: null },
+    { code: 'APPLICANT_VIDEO', name: 'Applicant Video with Aadhaar', required: false, kind: 'VIDEO', file: null, verified: null },
+    { code: 'PAN_CARD', name: 'PAN Card', required: true, file: null, verified: null },
   ],
+  edits: [],
+  can_edit: true,
+  locked_fields: [],
+  approval: NOT_APPROVED,
+  history: [],
   ...over,
 });
 
-function mockApi(answer: () => Response, role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
+/* `verify` answers POST …/documents/:docType/verify, from its document and body; `approve` POST …/approve. */
+function mockApi(
+  answer: () => Response,
+  role: 'ADMIN' | 'VIEWER' = 'ADMIN',
+  opts: { verify?: (code: string, body: { verified: boolean }) => Response; approve?: () => Response } = {},
+) {
   const calls: string[] = [];
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = String(input);
     calls.push(url);
-    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'EDP Admin', email: 'edp.admin@example.com', role } });
+    const check = /\/documents\/([^/]+)\/verify$/.exec(url)?.[1];
+    if (opts.verify && check && init?.method === 'POST') return opts.verify(check, JSON.parse(String(init.body)) as { verified: boolean });
+    if (opts.approve && url.endsWith(`/manage/applicants/${ID}/approve`)) return opts.approve();
+    if (url.endsWith('/manage/filters')) return json(200, { data: { districts: [], categories: [], centres: [], stages: [] } });
+    if (url.endsWith('/manage/settings/batch')) return json(200, { data: { size: 2, updated_at: null, updated_by: null } });
+    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'Program Admin', email: 'admin@example.com', role } });
     if (url.endsWith('/manage/summary'))
       return json(200, { data: { total: 1, counts: {}, stages: [], follow_ups: { NONE: 1, PENDING: 0, CALLED: 0, SECOND_CALL: 0, FORM_FILLED: 0 } } });
     if (url.includes('/manage/applicants?')) return json(200, { data: [row], meta: { page: 1, limit: 25, total: 1, totalPages: 1 } });
@@ -122,12 +159,12 @@ function mockApi(answer: () => Response, role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
     if (url.endsWith('/file?download=1'))
       return new Response(new Blob(['jpeg']), {
         status: 200,
-        headers: { 'Content-Disposition': `attachment; filename="EDP-000007_Kavya_Jadhav_Photo.jpg"; filename*=UTF-8''EDP-000007_Kavya_Jadhav_Photo.jpg` },
+        headers: { 'Content-Disposition': `attachment; filename="IPP-000007_Kavya_Jadhav_Photo.jpg"; filename*=UTF-8''IPP-000007_Kavya_Jadhav_Photo.jpg` },
       });
     if (url.endsWith('/documents.zip'))
       return new Response(new Blob(['PK']), {
         status: 200,
-        headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="EDP-000007_Kavya_Jadhav.zip"' },
+        headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="IPP-000007_Kavya_Jadhav.zip"' },
       });
     if (url.endsWith(`/manage/applicants/${ID}`)) return answer();
     return json(404, { message: 'not mocked' });
@@ -171,7 +208,7 @@ describe('Tracking panel: one student', () => {
     mockApi(() => json(200, { data: detail() }));
     renderAt(`/manage/applicants/${ID}`);
     expect(await screen.findByRole('heading', { name: 'Kavya Jadhav', level: 2 })).toBeInTheDocument();
-    expect(screen.getByText('EDP-000001')).toBeInTheDocument();
+    expect(screen.getByText('IPP-000001')).toBeInTheDocument();
     expect(screen.getByText('1028153012345678')).toBeInTheDocument();
 
     const basic = screen.getByRole('region', { name: 'Basic Details' });
@@ -248,11 +285,11 @@ describe('Tracking panel: one student', () => {
     expect(within(within(docs).getByRole('row', { name: /Applicant Video/ })).queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
 
     await userEvent.click(within(docs).getByRole('button', { name: 'Download Photo' }));
-    await waitFor(() => expect(saved).toEqual(['EDP-000007_Kavya_Jadhav_Photo.jpg']));
+    await waitFor(() => expect(saved).toEqual(['IPP-000007_Kavya_Jadhav_Photo.jpg']));
     expect(calls).toContainEqual(expect.stringMatching(new RegExp(`/manage/applicants/${ID}/documents/PHOTO/file[?]download=1$`)));
 
     await userEvent.click(within(docs).getByRole('button', { name: 'Download all documents (ZIP)' }));
-    await waitFor(() => expect(saved).toEqual(['EDP-000007_Kavya_Jadhav_Photo.jpg', 'EDP-000007_Kavya_Jadhav.zip']));
+    await waitFor(() => expect(saved).toEqual(['IPP-000007_Kavya_Jadhav_Photo.jpg', 'IPP-000007_Kavya_Jadhav.zip']));
     expect(calls).toContainEqual(expect.stringMatching(new RegExp(`/manage/applicants/${ID}/documents[.]zip$`)));
     expect(within(docs).getByRole('button', { name: 'Download all documents (ZIP)' })).toBeEnabled();
   });
@@ -275,15 +312,290 @@ describe('Tracking panel: one student', () => {
     expect(screen.queryByRole('button', { name: 'Add follow-up' })).not.toBeInTheDocument();
   });
 
-  it('says "Not submitted yet" for a draft', async () => {
+  it('says "Not submitted yet" for a draft, without an approval stage or a way to verify its documents', async () => {
     mockApi(() =>
       json(200, {
-        data: detail({ status: 'DRAFT', registration: null, steps: { basic_completed_at: '2026-10-24T11:57:00Z', main_completed_at: null, submitted_at: null } }),
+        data: detail({
+          status: 'DRAFT',
+          registration: null,
+          approval: null,
+          steps: { basic_completed_at: '2026-10-24T11:57:00Z', main_completed_at: null, submitted_at: null },
+        }),
       }),
     );
     renderAt(`/manage/applicants/${ID}`);
     expect(await screen.findByText('Not submitted yet')).toBeInTheDocument();
     expect(screen.getByText('Step 1 filled (Basic Details)')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Approval stage' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Approval history' })).not.toBeInTheDocument();
+    /* Signed in as an admin (Add follow-up is offered), yet nothing to mark. */
+    expect(await screen.findByRole('button', { name: 'Add follow-up' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Verification' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Verify|Approve)/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/documents verified/)).not.toBeInTheDocument();
+  });
+
+  /* Two uploaded documents, the first verified. */
+  const twoDocuments = (): ApplicantDetail['documents'] => {
+    const [photo, video, pan] = detail().documents;
+    return [
+      { ...photo!, verified: { verified: true, at: '2026-11-25T12:00:00Z', by: 'Program Admin' } },
+      video!,
+      { ...pan!, file: { ...photo!.file!, doc_type: 'PAN_CARD', original_name: 'pan.pdf' }, verified: { verified: false, at: null, by: null } },
+    ];
+  };
+
+  it('each uploaded document is verified on its own (who and when), and can be undone; the form can be approved once all are', async () => {
+    const bodies: unknown[] = [];
+    let current = detail({ documents: twoDocuments() });
+    const calls = mockApi(() => json(200, { data: current }), 'ADMIN', {
+      verify: (code, body) => {
+        bodies.push([code, body]);
+        return json(200, {
+          data: {
+            verified: body.verified,
+            at: body.verified ? '2026-11-25T12:30:00Z' : null,
+            by: body.verified ? 'Program Admin' : null,
+            documents: { uploaded: 2, verified: body.verified ? 2 : 1 },
+          },
+        });
+      },
+      approve: () => {
+        current = detail({ documents: twoDocuments(), approval: { ...NOT_APPROVED, stage: 'BATCH', stage_label: 'Approved: waiting for a batch' } });
+        return json(200, { data: { approved: 1 } });
+      },
+    });
+    renderAt(`/manage/applicants/${ID}`);
+    const docs = await screen.findByRole('region', { name: 'Documents' });
+    expect(within(docs).getByText('1 of 2 documents verified')).toBeInTheDocument();
+    expect(within(docs).getByText('2 of 3 documents uploaded')).toBeInTheDocument();
+    const photo = within(docs).getByRole('row', { name: /photo\.jpg/ });
+    expect(photo).toHaveTextContent(/Verified.*Program Admin · 25 Nov(ember)? 2026/);
+    /* A document that is not uploaded has nothing to verify. */
+    expect(within(within(docs).getByRole('row', { name: /Applicant Video/ })).queryByRole('button')).not.toBeInTheDocument();
+
+    const approve = await screen.findByRole('button', { name: 'Approve' });
+    expect(approve).toBeDisabled();
+    expect(approve).toHaveAccessibleDescription('First verify all documents, then approve (1 of 2 verified).');
+
+    await userEvent.click(within(docs).getByRole('button', { name: 'Verify PAN Card' }));
+    expect(await within(docs).findByText('2 of 2 documents verified')).toBeInTheDocument();
+    expect(approve).toBeEnabled();
+    await userEvent.click(within(docs).getByRole('button', { name: 'Undo the verification of PAN Card' }));
+    expect(await within(docs).findByText('1 of 2 documents verified')).toBeInTheDocument();
+    expect(approve).toBeDisabled();
+    await userEvent.click(within(docs).getByRole('button', { name: 'Verify PAN Card' }));
+    await within(docs).findByText('2 of 2 documents verified');
+    expect(bodies).toEqual([
+      ['PAN_CARD', { verified: true }],
+      ['PAN_CARD', { verified: false }],
+      ['PAN_CARD', { verified: true }],
+    ]);
+
+    await userEvent.click(approve);
+    const dialog = screen.getByRole('alertdialog', { name: "Approve Kavya Jadhav's form?" });
+    expect(dialog).toHaveTextContent('The submitted form (IPP-000001) will be approved and wait for a batch.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve' }));
+    expect(await screen.findByText("Kavya Jadhav's form approved. Put it into a batch to send it to the Divisional Officer.")).toBeInTheDocument();
+    expect(await screen.findByText('Approved: waiting for a batch')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(calls.some((u) => u.endsWith(`/manage/applicants/${ID}/approve`))).toBe(true);
+  });
+
+  it('shows why a document could not be verified, and leaves it as it was', async () => {
+    mockApi(() => json(200, { data: detail() }), 'ADMIN', { verify: () => json(409, { message: 'The form is finally approved' }) });
+    renderAt(`/manage/applicants/${ID}`);
+    const docs = await screen.findByRole('region', { name: 'Documents' });
+    await userEvent.click(await within(docs).findByRole('button', { name: 'Verify Photo' }));
+    expect(await within(docs).findByText('The form is finally approved')).toBeInTheDocument();
+    expect(within(docs).getByText('0 of 1 documents verified')).toBeInTheDocument();
+    expect(within(docs).getByRole('button', { name: 'Verify Photo' })).toBeEnabled();
+  });
+
+  it('after the final approval nothing can be verified or approved, and the form cannot be edited', async () => {
+    mockApi(() =>
+      json(200, {
+        data: detail({ documents: twoDocuments(), can_edit: false, approval: { ...NOT_APPROVED, stage: 'APPROVED', stage_label: 'Final approved' } }),
+      }),
+    );
+    renderAt(`/manage/applicants/${ID}`);
+    expect(await screen.findByRole('button', { name: 'Add follow-up' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Verify|Undo|Approve)/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Edit form' })).not.toBeInTheDocument();
+  });
+
+  it('a viewer sees what is verified, by whom and when, without a way to change anything', async () => {
+    mockApi(() => json(200, { data: detail({ documents: twoDocuments() }) }), 'VIEWER');
+    renderAt(`/manage/applicants/${ID}`);
+    const docs = await screen.findByRole('region', { name: 'Documents' });
+    await screen.findByText('View only');
+    expect(within(docs).getByText('1 of 2 documents verified')).toBeInTheDocument();
+    expect(within(docs).getByRole('row', { name: /photo\.jpg/ })).toHaveTextContent(/Verified.*Program Admin · 25 Nov(ember)? 2026/);
+    expect(screen.queryByRole('button', { name: /^(Verify|Undo|Approve)/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Edit form' })).not.toBeInTheDocument();
+  });
+
+  it('shows the form under the current names of the fields and documents, own fields in a card of their own', async () => {
+    const field = (key: string, step: number, label_en: string, text: string, over: Partial<ViewField> = {}): ViewField => ({
+      key,
+      step,
+      label_en,
+      label_mr: null,
+      type: 'TEXT',
+      value: text,
+      text,
+      custom: false,
+      ...over,
+    });
+    mockApi(() =>
+      json(200, {
+        data: detail({
+          view_fields: [
+            field('first_name', 1, 'Given Name', 'Kavya'),
+            field('caste_id', 1, 'Category of the student', 'Maratha', { type: 'DROPDOWN', value: 'c1' }),
+            field('district_id', 1, 'Home District', 'Pune', { type: 'DROPDOWN', value: 'dist1' }),
+            field('date_of_birth', 1, 'Birth Date', '2002-06-01', { type: 'DATE' }),
+            field('disability_status', 1, 'Person with Disability', 'No'),
+            field('disability_type', 1, 'Type of Disability', ''),
+            field('x_hobby', 1, 'Hobby', 'Reading', { custom: true }),
+            field('technology', 2, 'Course Technology', 'Web Design & Development', { type: 'DROPDOWN', value: 'T03' }),
+            field('qualification_board', 2, 'College Name', 'Sample College'),
+            field('educational_status', 2, 'Educational Status', 'Final Year', { type: 'DROPDOWN', value: 'FINAL' }),
+            field('grading_type', 2, 'Grading', 'Percentage', { type: 'DROPDOWN', value: 'PERCENTAGE' }),
+            field('score', 2, 'Marks', '72.50'),
+          ],
+          documents: [{ ...detail().documents[0]!, name: 'Passport Photo' }],
+        }),
+      }),
+    );
+    renderAt(`/manage/applicants/${ID}`);
+    const basic = await screen.findByRole('region', { name: 'Basic Details' });
+    expect(valueOf(basic, 'Given Name')).toHaveTextContent('Kavya');
+    expect(valueOf(basic, 'Category of the student')).toHaveTextContent('Maratha');
+    expect(valueOf(basic, 'Birth Date')).toHaveTextContent('01/06/2002');
+    expect(within(basic).queryByText('Type of Disability')).not.toBeInTheDocument();
+    expect(valueOf(screen.getByRole('region', { name: 'Address' }), 'Home District')).toHaveTextContent('Pune');
+    expect(valueOf(screen.getByRole('region', { name: 'Course & Center' }), 'Course Technology')).toHaveTextContent('Web Design & Development');
+    const qualification = screen.getByRole('region', { name: 'Qualification' });
+    expect(valueOf(qualification, 'College Name')).toHaveTextContent('Sample College');
+    expect(valueOf(qualification, 'Educational Status')).toHaveTextContent('Final Year');
+    expect(valueOf(qualification, 'Marks')).toHaveTextContent('72.50%');
+    expect(valueOf(screen.getByRole('region', { name: 'Additional details' }), 'Hobby')).toHaveTextContent('Reading');
+    expect(screen.queryByText('First Name')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Documents' })).getByRole('button', { name: 'View Passport Photo' })).toBeInTheDocument();
+  });
+
+  it('lists what was changed on the form: when, who, and each field from → to', async () => {
+    mockApi(() =>
+      json(200, {
+        data: detail({
+          edits: [
+            {
+              at: '2026-11-25T12:00:00Z',
+              by: 'Program Admin',
+              changes: [
+                { key: 'father_name', label: 'Father Name', from: 'Suresh Jadav', to: 'Suresh Jadhav' },
+                { key: 'landmark', label: 'Landmark', from: null, to: 'Near the bus stand' },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+    renderAt(`/manage/applicants/${ID}`);
+    const changes = await screen.findByRole('region', { name: 'Changes' });
+    expect(changes).toHaveTextContent(/25 Nov(ember)? 2026.*Program Admin/);
+    expect(changes).toHaveTextContent('Father Name: Suresh Jadav → Suresh Jadhav');
+    expect(changes).toHaveTextContent('Landmark: — → Near the bus stand');
+  });
+
+  it('shows the whole approval history, newest first, with who, when and why, and links the batch', async () => {
+    const move = (over: Partial<ApprovalEvent>): ApprovalEvent => ({
+      action: 'APPROVE',
+      from: { stage: 'AUDITOR', name: 'Auditor' },
+      to: { stage: 'BATCH', name: 'Batch' },
+      reason: null,
+      by: 'Program Auditor',
+      at: '2026-11-21T12:00:00Z',
+      ...over,
+    });
+    const rejected = move({
+      action: 'REJECT',
+      from: { stage: 'COEP', name: 'COEP' },
+      to: { stage: 'DIVISION', name: 'Divisional Officer' },
+      reason: 'Photo is not clear',
+      by: 'COEP Reviewer',
+      at: '2026-11-24T12:00:00Z',
+    });
+    const history = [
+      rejected,
+      move({
+        from: { stage: 'DIVISION', name: 'Divisional Officer' },
+        to: { stage: 'COEP', name: 'COEP' },
+        by: 'Divisional Officer Pune',
+        at: '2026-11-23T12:00:00Z',
+      }),
+      move({ from: { stage: 'BATCH', name: 'Batch' }, to: { stage: 'DIVISION', name: 'Divisional Officer' }, at: '2026-11-22T12:00:00Z' }),
+      move({}),
+    ];
+    mockApi(() =>
+      json(200, {
+        data: detail({
+          history,
+          approval: {
+            ...NOT_APPROVED,
+            stage: 'DIVISION',
+            stage_label: 'With Divisional Officer',
+            last_event: rejected,
+            batch: { id: 'b1', name: 'Pune Batch 1' },
+          },
+        }),
+      }),
+    );
+    renderAt(`/manage/applicants/${ID}`);
+    const card = await screen.findByRole('region', { name: 'Approval history' });
+    const moves = within(card).getAllByRole('listitem');
+    expect(moves).toHaveLength(4);
+    expect(moves[0]).toHaveTextContent(/Rejected by COEP.*sent back to Divisional Officer.*24 Nov(ember)? 2026.*COEP Reviewer.*Reason: Photo is not clear/);
+    expect(moves[1]).toHaveTextContent(/Approved by Divisional Officer.*sent to COEP.*Divisional Officer Pune/);
+    expect(moves[2]).toHaveTextContent(/Put into a batch.*sent to Divisional Officer/);
+    expect(moves[3]).toHaveTextContent(/Approved by Auditor.*waiting for a batch.*Program Auditor/);
+    const stage = screen.getByRole('group', { name: 'Approval stage' });
+    expect(stage).toHaveTextContent('Rejected by COEP: Photo is not clear');
+    expect(within(stage).getByRole('link', { name: 'Pune Batch 1' })).toHaveAttribute('href', '/manage/batches/b1');
+  });
+
+  it('shows the approval stage of a submitted form: with the Auditor, then at a stage', async () => {
+    mockApi(() => json(200, { data: detail() }));
+    const a = renderAt(`/manage/applicants/${ID}`);
+    expect(await screen.findByRole('group', { name: 'Approval stage' })).toHaveTextContent('Not approved yet');
+    expect(screen.getByRole('region', { name: 'Approval history' })).toHaveTextContent('No approval or rejection yet.');
+    a.unmount();
+    vi.restoreAllMocks();
+
+    mockApi(() =>
+      json(200, {
+        data: detail({
+          approval: {
+            ...NOT_APPROVED,
+            stage: 'ADMIN',
+            stage_label: 'With Admin (final approval)',
+            last_event: {
+              action: 'APPROVE',
+              from: { stage: 'HEAD_OFFICE', name: 'Head Office' },
+              to: { stage: 'ADMIN', name: 'Admin' },
+              reason: null,
+              by: 'Head Office Reviewer',
+              at: '2026-11-25T12:00:00Z',
+            },
+          },
+        }),
+      }),
+    );
+    renderAt(`/manage/applicants/${ID}`);
+    const stage = await screen.findByRole('group', { name: 'Approval stage' });
+    expect(stage).toHaveTextContent('With Admin (final approval)');
+    expect(stage).toHaveTextContent('Approved by Head Office (Head Office Reviewer)');
   });
 
   it('says so when the student does not exist', async () => {

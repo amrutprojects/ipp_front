@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../src/App';
 import { DEFAULT_SUPPORT_MESSAGE, SupportMessage } from '../src/components/SupportMessage';
-import type { HelpSettings, ManageRole, SupportSettings, WelcomeSettings } from '../src/types';
+import type { BatchSettings, HelpSettings, ManageRole, SupportSettings, WelcomeSettings } from '../src/types';
 import { helpIssues, supportIssues, welcomeIssues } from '../src/validation';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -11,10 +11,10 @@ const VIEW_ONLY = 'Your account can only view. Ask an administrator to make this
 
 const SETTINGS: SupportSettings = {
   message: 'For help write to {email} or call {mobile}.',
-  email: 'edp.help@example.com',
-  mobile: '+91 80103 85237',
+  email: 'help@example.com',
+  mobile: '+91 90000 00000',
   updated_at: '2026-10-27T09:00:00Z',
-  updated_by: 'EDP Admin',
+  updated_by: 'Program Admin',
 };
 const WELCOME: WelcomeSettings = {
   enabled: true,
@@ -29,14 +29,15 @@ const HELP: HelpSettings = {
   title: 'Need help?',
   intro: 'The programme office answers between 10 am and 6 pm.',
   fields: [
-    { label: 'Contact Number', value: '8530092236' },
-    { label: 'Email ID', value: 'edp.help@example.com' },
+    { label: 'Contact Number', value: '9000000001' },
+    { label: 'Email ID', value: 'help@example.com' },
   ],
   updated_at: null,
   updated_by: null,
 };
-/* The three settings rows the page loads, one per section. */
-const SAVED: Record<string, unknown> = { support: SETTINGS, welcome: WELCOME, help: HELP };
+const BATCH: BatchSettings = { size: 30, updated_at: '2026-11-25T09:00:00Z', updated_by: 'Program Admin' };
+/* The settings rows the page loads, one per section. */
+const SAVED: Record<string, unknown> = { batch: BATCH, support: SETTINGS, welcome: WELCOME, help: HELP };
 
 function mockApi(opts: { role?: ManageRole; put?: (body: unknown) => Response; putRow?: keyof typeof SAVED } = {}) {
   const role = opts.role ?? 'ADMIN';
@@ -46,13 +47,13 @@ function mockApi(opts: { role?: ManageRole; put?: (body: unknown) => Response; p
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
     calls.push({ method, url, body });
-    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'EDP Admin', email: 'edp.admin@example.com', role } });
-    const row = /\/manage\/settings\/(support|welcome|help)$/.exec(url)?.[1];
+    if (url.endsWith('/manage/me')) return json(200, { data: { id: 'm1', name: 'Program Admin', email: 'admin@example.com', role } });
+    const row = /\/manage\/settings\/(batch|support|welcome|help)$/.exec(url)?.[1];
     if (row && method === 'GET') return json(200, { data: SAVED[row] });
     if (row && method === 'PUT') {
       if (opts.put && row === (opts.putRow ?? 'support')) return opts.put(body);
       if (role !== 'ADMIN') return json(403, { message: VIEW_ONLY });
-      return json(200, { data: { ...(body as object), updated_at: '2026-10-28T10:00:00Z', updated_by: 'EDP Admin' } });
+      return json(200, { data: { ...(body as object), updated_at: '2026-10-28T10:00:00Z', updated_by: 'Program Admin' } });
     }
     return json(404, { message: 'not mocked' });
   });
@@ -84,12 +85,12 @@ afterEach(() => {
 
 describe('SupportMessage', () => {
   it('turns {email} and {mobile} into mailto: and tel: links', () => {
-    const { container } = render(<SupportMessage support={{ message: DEFAULT_SUPPORT_MESSAGE, email: 'a@b.in', mobile: '+91 (80) 103-85237' }} />);
+    const { container } = render(<SupportMessage support={{ message: DEFAULT_SUPPORT_MESSAGE, email: 'a@b.in', mobile: '+91 (90) 000-00000' }} />);
     expect(container).toHaveTextContent(
-      'If you have any query related to your registration, you can contact us on email ID a@b.in or mobile number +91 (80) 103-85237.',
+      'If you have any query related to your registration, you can contact us on email ID a@b.in or mobile number +91 (90) 000-00000.',
     );
     expect(screen.getByRole('link', { name: 'a@b.in' })).toHaveAttribute('href', 'mailto:a@b.in');
-    expect(screen.getByRole('link', { name: '+91 (80) 103-85237' })).toHaveAttribute('href', 'tel:+918010385237');
+    expect(screen.getByRole('link', { name: '+91 (90) 000-00000' })).toHaveAttribute('href', 'tel:+919000000000');
   });
 
   it('shows a message without placeholders, then the contacts that are set', () => {
@@ -127,7 +128,7 @@ describe('supportIssues', () => {
       email: 'Enter a valid email address',
       mobile: 'Enter a valid mobile number',
     });
-    expect(supportIssues({ message: 'Ask the office please.', email: '', mobile: '+91 (80) 103-85237' })).toEqual({});
+    expect(supportIssues({ message: 'Ask the office please.', email: '', mobile: '+91 (90) 000-00000' })).toEqual({});
   });
 });
 
@@ -160,19 +161,19 @@ describe('welcomeIssues and helpIssues', () => {
 });
 
 describe('Settings (tracking panel)', () => {
-  it('is linked from the nav and loads all three settings with a preview and who changed them last', async () => {
+  it('is linked from the nav and loads the portal settings with a preview and who changed them last', async () => {
     mockApi();
     renderAt('/manage/settings');
     const support = await section('Support contact');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/manage/settings');
     expect(within(support).getByLabelText(/^Message/)).toHaveValue(SETTINGS.message);
-    expect(within(support).getByLabelText(/^Email/)).toHaveValue('edp.help@example.com');
-    expect(within(support).getByLabelText(/^Mobile/)).toHaveValue('+91 80103 85237');
+    expect(within(support).getByLabelText(/^Email/)).toHaveValue('help@example.com');
+    expect(within(support).getByLabelText(/^Mobile/)).toHaveValue('+91 90000 00000');
     expect(within(support).getByText('Use {email} and {mobile} where the email and mobile number should appear.')).toBeInTheDocument();
     const preview = within(support).getByRole('group', { name: 'Preview' });
-    expect(preview).toHaveTextContent('For help write to edp.help@example.com or call +91 80103 85237.');
-    expect(within(preview).getByRole('link', { name: 'edp.help@example.com' })).toHaveAttribute('href', 'mailto:edp.help@example.com');
-    expect(within(support).getByText(/^Last updated .* by EDP Admin$/)).toBeInTheDocument();
+    expect(preview).toHaveTextContent('For help write to help@example.com or call +91 90000 00000.');
+    expect(within(preview).getByRole('link', { name: 'help@example.com' })).toHaveAttribute('href', 'mailto:help@example.com');
+    expect(within(support).getByText(/^Last updated .* by Program Admin$/)).toBeInTheDocument();
 
     /* The congratulations popup and the Help button: saved values in their boxes, never saved yet in the note below. */
     const welcome = await section('Welcome message');
@@ -184,9 +185,9 @@ describe('Settings (tracking panel)', () => {
 
     const help = await section('Help button');
     expect(within(help).getByLabelText('Field 1 name')).toHaveValue('Contact Number');
-    expect(within(help).getByLabelText('Field 1 value')).toHaveValue('8530092236');
+    expect(within(help).getByLabelText('Field 1 value')).toHaveValue('9000000001');
     expect(within(help).getByLabelText('Field 2 name')).toHaveValue('Email ID');
-    expect(within(help).getByLabelText('Field 2 value')).toHaveValue('edp.help@example.com');
+    expect(within(help).getByLabelText('Field 2 value')).toHaveValue('help@example.com');
     /* Four lines are always offered, filled in or not. */
     expect(within(help).getByLabelText('Field 4 name')).toHaveValue('');
     expect(within(help).queryByLabelText('Field 5 name')).not.toBeInTheDocument();
@@ -199,7 +200,7 @@ describe('Settings (tracking panel)', () => {
     const message = within(support).getByLabelText(/^Message/);
     await userEvent.clear(message);
     await userEvent.type(message, 'Ask us at {{email}');
-    expect(within(support).getByRole('group', { name: 'Preview' })).toHaveTextContent('Ask us at edp.help@example.com');
+    expect(within(support).getByRole('group', { name: 'Preview' })).toHaveTextContent('Ask us at help@example.com');
     await userEvent.click(within(support).getByRole('button', { name: 'Reset to default text' }));
     expect(message).toHaveValue(DEFAULT_SUPPORT_MESSAGE);
     await userEvent.clear(within(support).getByLabelText(/^Mobile/));
@@ -208,7 +209,7 @@ describe('Settings (tracking panel)', () => {
     expect(await within(support).findByText('Support contact saved.')).toBeInTheDocument();
     const put = calls.find((c) => c.method === 'PUT')!;
     expect(put.url).toMatch(/\/edp\/manage\/settings\/support$/);
-    expect(put.body).toEqual({ message: DEFAULT_SUPPORT_MESSAGE, email: 'edp.help@example.com', mobile: '9876543210' });
+    expect(put.body).toEqual({ message: DEFAULT_SUPPORT_MESSAGE, email: 'help@example.com', mobile: '9876543210' });
     expect(within(support).getByLabelText(/^Mobile/)).toHaveValue('9876543210');
   });
 
@@ -248,12 +249,44 @@ describe('Settings (tracking panel)', () => {
       title: 'Need help?',
       intro: HELP.intro,
       fields: [
-        { label: 'Contact Number', value: '8530092236' },
-        { label: 'Email ID', value: 'edp.help@example.com' },
+        { label: 'Contact Number', value: '9000000001' },
+        { label: 'Email ID', value: 'help@example.com' },
         { label: 'WhatsApp', value: '9876543210' },
         { label: '', value: '' },
       ],
     });
+  });
+
+  it('saves the batch size, an exact whole number from 1 to 100', async () => {
+    const calls = mockApi();
+    renderAt('/manage/settings');
+    const batch = await section('Batch size');
+    const size = within(batch).getByLabelText(/^Number of students in one batch \(exact, 1–100\)/);
+    expect(size).toHaveValue(30);
+    expect(within(batch).getByText(/^Last updated .* by Program Admin$/)).toBeInTheDocument();
+
+    for (const bad of ['0', '101', '2.5']) {
+      await userEvent.clear(size);
+      await userEvent.type(size, bad);
+      await userEvent.click(within(batch).getByRole('button', { name: 'Save' }));
+      expect(within(batch).getByText('Enter a whole number from 1 to 100')).toBeInTheDocument();
+    }
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false);
+
+    await userEvent.clear(size);
+    await userEvent.type(size, '25');
+    await userEvent.click(within(batch).getByRole('button', { name: 'Save' }));
+    expect(await within(batch).findByText('Batch size saved.')).toBeInTheDocument();
+    const put = calls.find((c) => c.method === 'PUT')!;
+    expect(put.url).toMatch(/\/edp\/manage\/settings\/batch$/);
+    expect(put.body).toEqual({ size: 25 });
+    expect(size).toHaveValue(25);
+  });
+
+  it('gives the program support address as the example email', async () => {
+    mockApi();
+    renderAt('/manage/settings');
+    expect(await section('Help button')).toHaveTextContent('Email ID / support@sumago.ai.');
   });
 
   it('refuses a half-filled Help line before sending anything', async () => {
@@ -299,7 +332,7 @@ describe('Settings (tracking panel)', () => {
     expect(within(support).getByLabelText(/^Mobile/)).toHaveAttribute('readonly');
     expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
     expect(within(support).getByText(/^View only: /)).toBeInTheDocument();
-    expect(within(support).getByRole('group', { name: 'Preview' })).toHaveTextContent('For help write to edp.help@example.com');
+    expect(within(support).getByRole('group', { name: 'Preview' })).toHaveTextContent('For help write to help@example.com');
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reset to default text' })).not.toBeInTheDocument();
 
@@ -308,6 +341,7 @@ describe('Settings (tracking panel)', () => {
     expect(within(welcome).getByRole('checkbox', { name: 'Show this popup to students' })).toBeDisabled();
     const help = await section('Help button');
     expect(within(help).getByLabelText('Field 1 value')).toHaveAttribute('readonly');
+    expect(within(await section('Batch size')).getByLabelText(/^Number of students in one batch/)).toBeDisabled();
     expect(calls.every((c) => c.method === 'GET')).toBe(true);
   });
 });

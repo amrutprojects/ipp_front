@@ -5,7 +5,7 @@ import { fmtDate, Notice } from '../../components/ui';
 import { useCanEdit } from '../../session';
 import type { Centre } from '../../types';
 import CentreStatusDialog from './CentreStatusDialog';
-import { ManageShell } from './ManageLayout';
+import { MastersShell } from './ManageLayout';
 
 /* One centre, read-only, with Edit and Activate / Deactivate for an admin. */
 export default function CentreDetailPage() {
@@ -49,7 +49,7 @@ export default function CentreDetailPage() {
     : [];
 
   return (
-    <ManageShell>
+    <MastersShell wide={false}>
       <p className="mt8">
         <Link to="/manage/centres">← Back to Center Master</Link>
       </p>
@@ -81,6 +81,7 @@ export default function CentreDetailPage() {
               </div>
             ))}
           </dl>
+          {/* A centre's own technologies are no longer used: they depend on the student's district (Masters → Technologies).
           <h3 className="mt16">Allocated Technologies ({centre.technologies.length})</h3>
           {centre.technologies.length ? (
             <ul>
@@ -94,6 +95,7 @@ export default function CentreDetailPage() {
           ) : (
             <Notice tone="warn">No technologies are allocated to this center; students cannot choose a technology here.</Notice>
           )}
+          */}
         </section>
       ) : null}
       {toggling && centre && canEdit ? (
@@ -107,6 +109,6 @@ export default function CentreDetailPage() {
           }}
         />
       ) : null}
-    </ManageShell>
+    </MastersShell>
   );
 }

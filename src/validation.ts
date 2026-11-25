@@ -2,7 +2,7 @@
  * Client-side checks matching the API's rules (amrut-kalash-api registration.validation.ts and edp.validation.ts), so
  * most mistakes are shown before anything is sent. The server checks everything again.
  */
-import type { Form, FormField, Options } from './types';
+import type { DocumentKind, FieldType, Form, FormField } from './types';
 
 const NAME_RE = /^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u;
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -74,25 +74,28 @@ export function passwordIssue(v: string, T: Pick = EN): string | null {
   if (!/[0-9]/.test(v)) return T('पासवर्डमध्ये किमान एक अंक (0–9) असावा', 'Password must contain a digit');
   return null;
 }
-export function aadhaarIssue(v: string): string | null {
+export function aadhaarIssue(v: string, T: Pick = EN): string | null {
   const d = v.replace(/[\s-]/g, '');
-  if (!d) return 'Aadhaar number is required';
-  return /^[2-9]\d{11}$/.test(d) && verhoeffValid(d) ? null : 'Aadhaar number must be 12 digits with a valid checksum';
+  if (!d) return T('आधार क्रमांक आवश्यक आहे', 'Aadhaar number is required');
+  return /^[2-9]\d{11}$/.test(d) && verhoeffValid(d)
+    ? null
+    : T('आधार क्रमांक १२ अंकी व योग्य असावा', 'Aadhaar number must be 12 digits with a valid checksum');
 }
-export function dobIssue(v: string, today = new Date()): string | null {
+export function dobIssue(v: string, today = new Date(), T: Pick = EN): string | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-  if (!m) return 'Date of birth is required';
+  if (!m) return T('जन्मतारीख आवश्यक आहे', 'Date of birth is required');
   const d = new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!));
-  if (d.getUTCMonth() !== +m[2]! - 1) return 'Date of birth is not a real date';
-  if (d > today) return 'Date of birth cannot be in the future';
+  if (d.getUTCMonth() !== +m[2]! - 1) return T('जन्मतारीख योग्य नाही', 'Date of birth is not a real date');
+  if (d > today) return T('जन्मतारीख भविष्यातील असू शकत नाही', 'Date of birth cannot be in the future');
   const age =
     today.getUTCFullYear() - d.getUTCFullYear() - (today < new Date(Date.UTC(today.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())) ? 1 : 0);
-  return age < 14 || age > 100 ? 'Applicant must be between 14 and 100 years old' : null;
+  return age < 14 || age > 100 ? T('अर्जदाराचे वय १४ ते १०० वर्षे असावे', 'Applicant must be between 14 and 100 years old') : null;
 }
-const required = (label: string) => (v: string) => (v.trim() ? null : `${label} is required`);
-const text = (label: string, max: number) => (v: string) =>
-  !v.trim() ? `${label} is required` : v.trim().length > max ? `${label} must be at most ${max} characters` : null;
 
+/*
+ * The fields' names when the API does not send the Form fields master (GET /edp/options → fields); otherwise its labels
+ * are used everywhere.
+ */
 export const FIELD_LABELS: Record<FormField, string> = {
   first_name: 'First Name',
   last_name: 'Last Name',
@@ -121,9 +124,10 @@ export const FIELD_LABELS: Record<FormField, string> = {
   centre_id: 'Center Name',
   technology: 'Technology',
   education_id: 'Education Qualification',
+  educational_status: 'Educational Status',
   qualification_name: 'Qualification Name',
   qualification_stream: 'Subject / Stream / Branch',
-  qualification_board: 'Board / University',
+  qualification_board: 'College Name',
   qualification_completed_on: 'Qualification Completed On',
   grading_type: 'Grading Type',
   cgpa_scale: 'CGPA Scale',
@@ -138,122 +142,142 @@ export const isCgpa = (form: Form) => form.grading_type === 'CGPA';
 /* Today as YYYY-MM-DD in this browser's time zone. */
 export const localToday = (now = new Date()) => new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 
-export function pinCodeIssue(v: string): string | null {
-  if (!v.trim()) return 'PIN code is required';
-  return /^[1-9]\d{5}$/.test(v.trim()) ? null : 'PIN code must be 6 digits and cannot start with 0';
+export function pinCodeIssue(v: string, T: Pick = EN): string | null {
+  if (!v.trim()) return T('पिन कोड आवश्यक आहे', 'PIN code is required');
+  return /^[1-9]\d{5}$/.test(v.trim())
+    ? null
+    : T('पिन कोड ६ अंकी असावा व ० ने सुरू होऊ नये', 'PIN code must be 6 digits and cannot start with 0');
 }
-export function completedOnIssue(v: string, today = localToday()): string | null {
+/* A YYYY-MM-DD that is a real day of the calendar. */
+const realDate = (v: string) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-  if (!m) return 'Qualification completion date is required';
+  if (!m) return false;
   const d = new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!));
-  if (d.getUTCMonth() !== +m[2]! - 1 || d.getUTCDate() !== +m[3]!) return 'Qualification completion date is not a real date';
-  return v > today ? 'Qualification completion date cannot be in the future' : null;
+  return d.getUTCMonth() === +m[2]! - 1 && d.getUTCDate() === +m[3]!;
+};
+export function completedOnIssue(v: string, today = localToday(), T: Pick = EN): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return T('पात्रता पूर्ण झाल्याची तारीख आवश्यक आहे', 'Qualification completion date is required');
+  if (!realDate(v)) return T('पात्रता पूर्ण झाल्याची तारीख योग्य नाही', 'Qualification completion date is not a real date');
+  return v > today
+    ? T('पात्रता पूर्ण झाल्याची तारीख भविष्यातील असू शकत नाही', 'Qualification completion date cannot be in the future')
+    : null;
 }
-export function scoreIssue(v: string, gradingType: string, cgpaScale: string): string | null {
+export function scoreIssue(v: string, gradingType: string, cgpaScale: string, T: Pick = EN): string | null {
   const t = v.trim();
-  if (!t) return 'Score is required';
-  if (!/^\d+(\.\d{1,2})?$/.test(t)) return 'Score must be a number with at most 2 decimal places';
+  if (!t) return T('गुण आवश्यक आहेत', 'Score is required');
+  if (!/^\d+(\.\d{1,2})?$/.test(t))
+    return T('गुण ही जास्तीत जास्त २ दशांश स्थळे असलेली संख्या असावी', 'Score must be a number with at most 2 decimal places');
   const n = Number(t);
   if (gradingType === 'CGPA') {
     const scale = Number(cgpaScale);
     if (!scale) return null; /* the scale itself is reported missing */
-    return n > scale ? `CGPA must be between 0 and ${scale}` : null;
+    return n > scale ? T(`CGPA ० ते ${mrNum(scale)} या दरम्यान असावा`, `CGPA must be between 0 and ${scale}`) : null;
   }
-  if (gradingType === 'PERCENTAGE') return n > 100 ? 'Percentage must be between 0 and 100' : null;
+  if (gradingType === 'PERCENTAGE') return n > 100 ? T('टक्केवारी ० ते १०० या दरम्यान असावी', 'Percentage must be between 0 and 100') : null;
   return null;
 }
 
-/* What a rule may look at besides the value: the whole form (conditional rules) and the dropdown lists. */
-export interface RuleContext {
+/* A field to check, as the masters define it: its current label, whether it must be filled, and its choices (dropdowns). */
+export interface FieldRule {
+  key: string;
+  label: string;
+  required: boolean;
+  type: FieldType;
+  /* The values that can be chosen; null = not a dropdown, or its list is not known. */
+  choices: readonly string[] | null;
+}
+interface RuleContext {
   form: Form;
-  options?: { [K in 'genders' | 'marital_statuses' | 'cgpa_scales' | 'qualification_classes']?: Options[K] };
+  T: Pick;
   today?: string;
 }
-type Rule = (v: string, ctx: RuleContext) => string | null;
-const oneOf =
-  (label: string, list: (ctx: RuleContext) => readonly string[] | undefined): Rule =>
-  (v, ctx) => {
-    if (!v.trim()) return `${label} is required`;
-    const items = list(ctx);
-    return items && items.length && !items.includes(v) ? `Select a valid ${label.toLowerCase()}` : null;
-  };
-const yesNo = (label: string): Rule => (v) => (v === 'Yes' || v === 'No' ? null : `${label}: select Yes or No`);
-const optionalMax = (label: string, max: number): Rule => (v) => (v.trim().length > max ? `${label} must be at most ${max} characters` : null);
+/* Longest values of the own fields (amrut-kalash-api CUSTOM_VALUE_MAX). */
+export const OWN_TEXT_MAX = 250;
+export const OWN_TEXTAREA_MAX = 2000;
 
-const RULES: Record<FormField, Rule> = {
-  first_name: (v) => nameIssue('First name', v, 100),
-  last_name: (v) => nameIssue('Last name', v, 100),
-  father_name: (v) => nameIssue('Father name', v, 150),
-  mother_name: (v) => nameIssue('Mother name', v, 150),
-  email: (v) => emailIssue(v),
-  date_of_birth: (v) => dobIssue(v),
-  current_address: text('Current address', 500),
-  aadhaar_number: (v) => aadhaarIssue(v),
-  mobile_number: (v) => mobileIssue(v),
-  religion: required('Religion'),
-  caste_id: required('Caste'),
-  gender: oneOf('Gender', (c) => c.options?.genders),
-  marital_status: oneOf('Marital status', (c) => c.options?.marital_statuses),
-  permanent_address: text('Permanent address', 500),
-  landmark: optionalMax('Landmark', 150),
-  district_id: required('District'),
-  taluka: optionalMax('Taluka', 100),
-  pin_code: pinCodeIssue,
-  alternate_mobile_number: (v, { form }) => {
-    if (!v.trim()) return null;
+const max =
+  (n: number): Check =>
+  (v, f, { T }) =>
+    v.length > n ? T(`${f.label}: जास्तीत जास्त ${mrNum(n)} वर्ण`, `${f.label} must be at most ${n} characters`) : null;
+type Check = (v: string, f: FieldRule, ctx: RuleContext) => string | null;
+
+/* What a filled value must look like, beyond being one of the field's choices. */
+const FORMAT: Partial<Record<string, Check>> = {
+  first_name: (v, f, { T }) => nameIssue(f.label, v, 100, true, T),
+  last_name: (v, f, { T }) => nameIssue(f.label, v, 100, true, T),
+  father_name: (v, f, { T }) => nameIssue(f.label, v, 150, true, T),
+  mother_name: (v, f, { T }) => nameIssue(f.label, v, 150, true, T),
+  email: (v, _f, { T }) => emailIssue(v, T),
+  date_of_birth: (v, _f, { T }) => dobIssue(v, new Date(), T),
+  current_address: max(500),
+  aadhaar_number: (v, _f, { T }) => aadhaarIssue(v, T),
+  mobile_number: (v, _f, { T }) => mobileIssue(v, T),
+  permanent_address: max(500),
+  landmark: max(150),
+  taluka: max(100),
+  pin_code: (v, _f, { T }) => pinCodeIssue(v, T),
+  alternate_mobile_number: (v, f, { form, T }) => {
     const alt = normaliseMobile(v);
-    if (!/^[6-9]\d{9}$/.test(alt)) return 'Alternate mobile number must be a 10-digit Indian number starting 6–9';
-    return alt === normaliseMobile(form.mobile_number ?? '') ? 'Alternate mobile number must be different from the mobile number' : null;
+    if (!/^[6-9]\d{9}$/.test(alt))
+      return T(`${f.label} ६–९ ने सुरू होणारा १० अंकी भारतीय क्रमांक असावा`, `${f.label} must be a 10-digit Indian number starting 6–9`);
+    return alt === normaliseMobile(form.mobile_number ?? '')
+      ? T(`${f.label} मोबाईल क्रमांकापेक्षा वेगळा असावा`, `${f.label} must be different from the mobile number`)
+      : null;
   },
-  alternate_email: (v, { form }) => {
-    const t = v.trim();
-    if (!t) return null;
-    if (t.length > 254 || !EMAIL_RE.test(t)) return 'Enter a valid alternate email address';
-    return t.toLowerCase() === (form.email ?? '').trim().toLowerCase() ? 'Alternate email must be different from your account email' : null;
+  alternate_email: (v, f, { form, T }) => {
+    if (v.length > 254 || !EMAIL_RE.test(v)) return T('योग्य ईमेल पत्ता टाका', 'Enter a valid email address');
+    return v.toLowerCase() === (form.email ?? '').trim().toLowerCase()
+      ? T(`${f.label} खात्याच्या ईमेलपेक्षा वेगळा असावा`, `${f.label} must be different from your account email`)
+      : null;
   },
-  disability_status: yesNo('Person with disability'),
-  disability_type: (v, { form }) => (isDisabled(form) ? text('Type of disability', 100)(v) : null),
-  disability_certificate_number: (v, { form }) => {
-    if (!isDisabled(form)) return null;
-    if (!v.trim()) return 'Disability certificate number is required';
-    return /^[A-Za-z0-9/-]{4,50}$/.test(v.trim())
+  disability_status: (v, f, { T }) => (v === 'Yes' || v === 'No' ? null : T(`${f.label}: होय किंवा नाही निवडा`, `${f.label}: select Yes or No`)),
+  disability_type: max(100),
+  disability_certificate_number: (v, f, { T }) =>
+    /^[A-Za-z0-9/-]{4,50}$/.test(v)
       ? null
-      : 'Disability certificate number must be 4–50 characters: letters, digits, / and - only';
-  },
-  region_id: required('Course district'),
-  centre_id: required('Center name'),
-  /* Only non-empty here: whether the chosen centre offers it is checked by the server (body.technology). */
-  technology: required('Technology'),
-  education_id: required('Education qualification'),
-  qualification_name: text('Qualification name', 150),
-  qualification_stream: text('Subject / stream / branch', 150),
-  qualification_board: text('Board / university', 200),
-  qualification_completed_on: (v, { today }) => completedOnIssue(v, today),
-  grading_type: (v) => (v === 'PERCENTAGE' || v === 'CGPA' ? null : 'Grading type is required'),
-  cgpa_scale: (v, ctx) => {
-    if (!isCgpa(ctx.form)) return null;
-    if (!v.trim()) return 'CGPA scale is required';
-    const scales = (ctx.options?.cgpa_scales?.length ? ctx.options.cgpa_scales : [4, 5, 10]).map(String);
-    return scales.includes(v) ? null : 'Select a valid CGPA scale';
-  },
-  score: (v, { form }) => scoreIssue(v, form.grading_type ?? '', form.cgpa_scale ?? ''),
-  qualification_class: oneOf('Class / division', (c) => c.options?.qualification_classes),
+      : T(`${f.label}: ४–५० वर्ण, फक्त इंग्रजी अक्षरे, अंक, / आणि -`, `${f.label} must be 4–50 characters: letters, digits, / and - only`),
+  qualification_name: max(150),
+  qualification_stream: max(150),
+  qualification_board: max(200),
+  qualification_completed_on: (v, _f, { today, T }) => completedOnIssue(v, today, T),
+  score: (v, _f, { form, T }) => scoreIssue(v, form.grading_type ?? '', form.cgpa_scale ?? '', T),
+};
+/* The own fields, by type. */
+const OWN: Partial<Record<FieldType, Check>> = {
+  TEXT: max(OWN_TEXT_MAX),
+  TEXTAREA: max(OWN_TEXTAREA_MAX),
+  NUMBER: (v, f, { T }) => (/^-?\d{1,12}(\.\d{1,4})?$/.test(v) ? null : T(`${f.label}: संख्या टाका`, `${f.label} must be a number`)),
+  DATE: (v, f, { T }) => (realDate(v) ? null : T(`${f.label}: योग्य तारीख निवडा`, `${f.label} is not a real date`)),
 };
 
-export function checkFields(
-  form: Form,
-  fields: readonly FormField[],
-  ctx: Omit<RuleContext, 'form'> = {},
-): Record<string, string> {
+/* Fields asked only in some cases (and cleared otherwise): the disability details, and the CGPA scale. */
+export function isAsked(key: string, form: Form): boolean {
+  if (key === 'disability_type' || key === 'disability_certificate_number') return isDisabled(form);
+  return key !== 'cgpa_scale' || isCgpa(form);
+}
+
+export function checkFields(form: Form, fields: readonly FieldRule[], ctx: { T?: Pick; today?: string } = {}): Record<string, string> {
   const errors: Record<string, string> = {};
+  const c: RuleContext = { form, T: ctx.T ?? EN, today: ctx.today };
   for (const f of fields) {
-    const issue = RULES[f](form[f] ?? '', { ...ctx, form });
-    if (issue) errors[f] = issue;
+    if (!isAsked(f.key, form)) continue;
+    const v = (form[f.key] ?? '').trim();
+    let issue: string | null;
+    if (!v) {
+      if (!f.required) continue;
+      issue = f.key === 'disability_status' ? FORMAT.disability_status!(v, f, c) : c.T(`${f.label} आवश्यक आहे`, `${f.label} is required`);
+    } else if (f.choices?.length && !f.choices.includes(v)) {
+      issue = c.T(`${f.label}: यादीतील पर्याय निवडा`, `Select a valid ${f.label}`);
+    } else {
+      issue = (FORMAT[f.key] ?? OWN[f.type])?.(v, f, c) ?? null;
+    }
+    if (issue) errors[f.key] = issue;
   }
   return errors;
 }
 
 export const MAX_FILE_MB = 5;
+export const MAX_VIDEO_MB = 50;
 export const ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
 const DEFAULT_FORMATS = ['PDF', 'JPG', 'JPEG', 'PNG'];
 const FORMAT_MIME: Record<string, string> = {
@@ -266,12 +290,13 @@ const FORMAT_MIME: Record<string, string> = {
 const orList = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}` : items[0] ?? '');
 
 /*
- * A document type's upload rule, as the server sends it (formats, max_mb); PDF / JPG / JPEG / PNG up to 5 MB when not
- * given. `short` is the line shown in the drop area (JPEG is the same format as JPG).
+ * A document type's upload rule, as the server sends it (formats, max_mb), else by its kind: a video MP4 up to 50 MB, any
+ * other PDF / JPG / JPEG / PNG up to 5 MB. `short` is the line shown in the drop area (JPEG is the same format as JPG).
  */
-export function fileRule(t?: { formats?: string[]; max_mb?: number }) {
-  const formats = t?.formats?.length ? t.formats.map((f) => f.toUpperCase()) : DEFAULT_FORMATS;
-  const maxMb = t?.max_mb ?? MAX_FILE_MB;
+export function fileRule(t?: { formats?: string[]; max_mb?: number; kind?: DocumentKind }) {
+  const video = t?.kind === 'VIDEO';
+  const formats = t?.formats?.length ? t.formats.map((f) => f.toUpperCase()) : video ? ['MP4'] : DEFAULT_FORMATS;
+  const maxMb = t?.max_mb ?? (video ? MAX_VIDEO_MB : MAX_FILE_MB);
   const mimes = [...new Set(formats.map((f) => FORMAT_MIME[f]).filter(Boolean))];
   return {
     formats,
@@ -281,7 +306,7 @@ export function fileRule(t?: { formats?: string[]; max_mb?: number }) {
   };
 }
 
-export function fileIssue(f: File, t?: { formats?: string[]; max_mb?: number }): string | null {
+export function fileIssue(f: File, t?: { formats?: string[]; max_mb?: number; kind?: DocumentKind }): string | null {
   const rule = fileRule(t);
   const ext = f.name.toLowerCase().split('.').pop() ?? '';
   if (!f.name.includes('.') || !rule.formats.some((x) => x.toLowerCase() === ext)) return `Only ${orList(rule.formats)} files are accepted`;
@@ -303,7 +328,7 @@ export interface CentreForm {
   email: string;
 }
 const CENTRE_NAME_RE = /^[\p{L}\p{M}\d][\p{L}\p{M}\d .,'’()/&-]*$/u;
-export function centreIssues(f: CentreForm, technologyCount = 0): Record<string, string> {
+export function centreIssues(f: CentreForm): Record<string, string> {
   const e: Record<string, string> = {};
   const name = f.name.trim().replace(/\s+/g, ' ');
   if (!name) e.name = 'Name is required';
@@ -324,7 +349,6 @@ export function centreIssues(f: CentreForm, technologyCount = 0): Record<string,
     e.contactNumber = 'Enter a 10-digit mobile number or a landline with STD code';
   const email = f.email.trim();
   if (email && (email.length > 254 || !EMAIL_RE.test(email))) e.email = 'Enter a valid email address';
-  if (technologyCount > 50) e.technologyCodes = 'At most 50 technologies';
   return e;
 }
 

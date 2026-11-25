@@ -2,7 +2,7 @@
   "name": "amrut-kalash-edp",
   "private": true,
   "version": "1.0.0",
-  "description": "ENTREPRENEURSHIP DEVELOPMENT PROGRAM portal (edp.sumago.ai): student sign-up, three-step form, and the /manage tracking panel",
+  "description": "3 Month Internship Placement Program portal (ipp.sumago.ai): student sign-up, three-step form, and the /manage tracking panel",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -29,8 +29,8 @@ const HELP: HelpContent = {
   title: 'Need any help?',
   intro: 'The programme office answers between 10 am and 6 pm.',
   fields: [
-    { label: 'Contact Number', value: '+91 80103 85237' },
-    { label: 'Email ID', value: 'edp.help@example.com' },
+    { label: 'Contact Number', value: '+91 90000 00000' },
+    { label: 'Email ID', value: 'help@example.com' },
     { label: 'WhatsApp', value: '9876543210' },
     { label: 'Office hours', value: 'Monday to Friday' },
   ],
@@ -182,8 +182,8 @@ describe('The Help button', () => {
     expect(within(panel).getByText('The programme office answers between 10 am and 6 pm.')).toBeInTheDocument();
     /* Every line is a name and its value, as the admins named them. */
     expect(within(panel).getAllByRole('term').map((t) => t.textContent)).toEqual(['Contact Number', 'Email ID', 'WhatsApp', 'Office hours']);
-    expect(within(panel).getByRole('link', { name: '+91 80103 85237' })).toHaveAttribute('href', 'tel:+918010385237');
-    expect(within(panel).getByRole('link', { name: 'edp.help@example.com' })).toHaveAttribute('href', 'mailto:edp.help@example.com');
+    expect(within(panel).getByRole('link', { name: '+91 90000 00000' })).toHaveAttribute('href', 'tel:+919000000000');
+    expect(within(panel).getByRole('link', { name: 'help@example.com' })).toHaveAttribute('href', 'mailto:help@example.com');
     expect(within(panel).getByRole('link', { name: '9876543210' })).toHaveAttribute('href', 'tel:9876543210');
     /* Not a number and not an address: shown as written. */
     expect(within(panel).getByText('Monday to Friday').closest('a')).toBeNull();
@@ -212,7 +212,7 @@ describe('The Help button', () => {
     );
     expect(await screen.findByRole('heading', { name: 'Verify your mobile number' })).toBeInTheDocument();
     await userEvent.click(await screen.findByRole('button', { name: 'Help' }));
-    expect(within(screen.getByRole('dialog', { name: 'Need any help?' })).getByRole('link', { name: 'edp.help@example.com' })).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog', { name: 'Need any help?' })).getByRole('link', { name: 'help@example.com' })).toBeInTheDocument();
   });
 
   it('is not shown when it is switched off, or when no contact detail has been set', async () => {

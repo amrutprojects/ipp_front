@@ -1,5 +1,8 @@
-import { aadhaarIssue, checkFields, dobIssue, mobileIssue, nameIssue, passwordIssue, verhoeffValid } from '../src/validation';
-import type { Form } from '../src/types';
+import { aadhaarIssue, checkFields, dobIssue, FIELD_LABELS, mobileIssue, nameIssue, passwordIssue, verhoeffValid, type FieldRule } from '../src/validation';
+import type { Form, FormField } from '../src/types';
+
+/* A required field under its usual name. */
+const rule = (key: FormField): FieldRule => ({ key, label: FIELD_LABELS[key], required: true, type: 'TEXT', choices: null });
 
 /* Same Verhoeff digit as amrut-kalash-api withVerhoeffDigit. */
 function withCheck(base: string): string {
@@ -44,6 +47,11 @@ describe('client-side rules match the API', () => {
     const empty = Object.fromEntries(
       ['first_name', 'region_id', 'technology', 'education_id'].map((k) => [k, '']),
     ) as unknown as Form;
-    expect(Object.keys(checkFields(empty, ['region_id', 'technology', 'education_id']))).toEqual(['region_id', 'technology', 'education_id']);
+    const errors = checkFields(empty, (['region_id', 'technology', 'education_id'] as const).map(rule));
+    expect(errors).toEqual({
+      region_id: 'Course District is required',
+      technology: 'Technology is required',
+      education_id: 'Education Qualification is required',
+    });
   });
 });
