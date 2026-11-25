@@ -148,8 +148,8 @@ function mockApi(opts: Opts = {}) {
     if (url.includes('/manage/centres?'))
       return json(200, {
         data: [
-          { id: 'c1', name: 'Pune Centre', code: 'PUN', districtName: 'Pune', isActive: true },
-          { id: 'c2', name: 'Baramati Centre', code: 'BAR', districtName: 'Pune', isActive: true },
+          { id: 'c1', name: 'Pune Centre', code: 'PUN', districtId: PUNE, districtName: 'Pune', isActive: true },
+          { id: 'c2', name: 'Baramati Centre', code: 'BAR', districtId: PUNE, districtName: 'Pune', isActive: true },
         ],
         meta: { page: 1, limit: 100, total: 2, totalPages: 1 },
       });
@@ -258,6 +258,45 @@ describe('Create batch (tracking panel)', () => {
     expect(screen.getByRole('group', { name: 'Selected for a batch' })).toHaveTextContent('A batch has one district: Pune');
     expect(box('Meera Joshi')).toHaveAttribute('title', 'A batch has one district: Pune');
     expect(box('Nikhil Deshpande')).toBeEnabled();
+  });
+
+  it('a district with a size of its own: as many students as that', async () => {
+    const own = (districts: object[], over: object = {}) => ({
+      size: () => json(200, { data: { size: 3, districts, updated_at: null, updated_by: null, ...over } }),
+    });
+    mockApi(own([{ district_id: SATARA, name: 'Satara', size: 1 }]));
+    renderAt('/manage');
+    expect(await screen.findByRole('button', { name: 'Create batch (0 of 3)' })).toBeDisabled();
+    await waitFor(() => expect(box('Meera Joshi')).toBeEnabled());
+    await userEvent.click(box('Meera Joshi'));
+    expect(createButton(1, 1)).toBeEnabled();
+    const bar = screen.getByRole('group', { name: 'Selected for a batch' });
+    expect(bar).toHaveTextContent('1 of 1 selected – ready: choose Create batch.');
+    expect(bar).toHaveTextContent('A batch has one district: Satara (its own batch size: 1)');
+    await userEvent.click(box('Meera Joshi'));
+    await userEvent.click(box('Asha Kulkarni'));
+    expect(createButton(1, 3)).toBeDisabled();
+    expect(screen.getByRole('group', { name: 'Selected for a batch' })).not.toHaveTextContent('its own batch size');
+  });
+
+  it('students without a district: the size of the district of the chosen centre', async () => {
+    mockApi({
+      size: () =>
+        json(200, {
+          data: { size: 1, districts: [{ district_id: PUNE, name: 'Pune', size: 2 }], district_required: false, updated_at: null, updated_by: null },
+        }),
+    });
+    renderAt('/manage');
+    await screen.findByText('Omkar Shinde');
+    await waitFor(() => expect(box('Omkar Shinde')).toBeEnabled());
+    await userEvent.click(box('Omkar Shinde'));
+    await userEvent.click(createButton(1, 1));
+    const dialog = screen.getByRole('dialog', { name: 'Create a batch of 1 student' });
+    expect(within(dialog).getByRole('button', { name: 'Create batch' })).toBeEnabled();
+    await waitFor(() => expect(within(dialog).getByRole('option', { name: /Baramati Centre/ })).toBeInTheDocument());
+    await userEvent.selectOptions(within(dialog).getByLabelText(/Centre/), 'c2');
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('A batch of Pune has exactly 2 students (Settings → Batch size); 1 selected.');
+    expect(within(dialog).getByRole('button', { name: 'Create batch' })).toBeDisabled();
   });
 
   it('keeps the selection while paging and filtering, stops at the batch size, and can be cleared', async () => {

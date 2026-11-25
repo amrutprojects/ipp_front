@@ -8,9 +8,8 @@ export type ApproveTarget = { kind: 'one'; applicant: Applicant } | { kind: 'sel
 
 /*
  * The confirmation before approving — POST /manage/applicants/:id/approve or /manage/applicants/approve-selected on
- * Yes. An approved form waits for a batch, which then goes to the Divisional Officer (Admin Panel → Student Approval
- * Stages). A student sent back to the Auditor is already in a batch: approving sends them straight back to the Divisional
- * Officer in it.
+ * Yes. An approved form waits for a batch, which then goes to the Divisional Officer (in Sarthi). A student sent back to the
+ * Auditor is already in a batch: approving sends them straight back to the Divisional Officer in it.
  */
 export default function ApproveDialog({
   target,

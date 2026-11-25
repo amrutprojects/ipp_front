@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, apiAll, ApiError } from '../../api';
 import { Field, Modal, Notice } from '../../components/ui';
 import type { BatchDetail, BatchSettings, Centre } from '../../types';
-import { choseOther, pickedDistrict, type BatchPick } from './batchPicks';
+import { choseOther, pickedDistrict, sizeFor, type BatchPick, type BatchRules } from './batchPicks';
 import { NO_PLAN, otherCentreText, planBody } from './batchPlan';
 import BatchPlanFields, { checkPlan, useTechnologies } from './BatchPlanFields';
 
@@ -26,11 +26,12 @@ export function useActiveCentres() {
 }
 
 /*
- * The batch size setting (Settings → Batch size): the exact number of students of a new batch; null = not loaded. And whether
- * each of them must have a district (the form requires it).
+ * The batch size setting (Settings → Batch size): the exact number of students of a new batch (null = not loaded), the
+ * districts with a size of their own, and whether each student must have a district (the form requires it).
  */
 export function useBatchSize(wanted: boolean) {
   const [size, setSize] = useState<number | null>(null);
+  const [sizes, setSizes] = useState<Record<string, number>>({});
   const [districtRequired, setDistrictRequired] = useState(true);
   const [failed, setFailed] = useState(false);
   const load = useCallback(() => {
@@ -38,27 +39,30 @@ export function useBatchSize(wanted: boolean) {
     api<BatchSettings>('/manage/settings/batch', { realm: 'manage' })
       .then((r) => {
         setSize(r.data.size);
+        setSizes(Object.fromEntries((r.data.districts ?? []).map((d) => [d.district_id, d.size])));
         setDistrictRequired(r.data.district_required ?? true);
         setFailed(false);
       })
       .catch(() => setFailed(true));
   }, [wanted]);
   useEffect(load, [load]);
-  return { size, districtRequired, failed: failed && size === null, reload: load };
+  return { size, sizes, districtRequired, failed: failed && size === null, reload: load };
 }
 
 /*
- * "Create batch": the selected students (approved by the Auditor, waiting for a batch, all of one district, exactly the
+ * "Create batch": the selected students (approved by the Auditor, waiting for a batch, all of one district, exactly its
  * batch size) become a named batch at an active Center Master centre, which goes to the Divisional Officer of that district
  * at once — POST /manage/batches. Its dates, delivery mode and technology may be given now or later. The API checks the
  * number, the district and that each student still waits for a batch.
  */
 export default function CreateBatchDialog({
   students,
+  rules,
   onClose,
   onDone,
 }: {
   students: BatchPick[];
+  rules: Pick<BatchRules, 'size' | 'sizes'>;
   /* `refused` = the API refused to create it (the list may be out of date). */
   onClose: (refused: boolean) => void;
   onDone: (message: string) => void;
@@ -76,6 +80,7 @@ export default function CreateBatchDialog({
   const centre = centres?.find((c) => c.id === centreId);
   /* Of students without a district: the centre's. */
   const district = pickedDistrict(students) ?? centre?.districtName ?? null;
+  const wanted = sizeFor(pickedDistrict(students) || !centre ? students : [{ district_id: centre.districtId ?? null }], rules);
   const otherCentre = centre ? otherCentreText(choseOther(students, centre), n) : '';
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
@@ -131,6 +136,11 @@ export default function CreateBatchDialog({
               ))}
             </select>
           </Field>
+          {wanted !== null && wanted !== n ? (
+            <p className="approve-why" role="alert">
+              A batch of {district ?? 'this district'} has exactly {wanted} student{wanted === 1 ? '' : 's'} (Settings → Batch size); {n} selected.
+            </p>
+          ) : null}
           {otherCentre ? (
             <p className="approve-why" role="status">
               {otherCentre}
@@ -155,7 +165,7 @@ export default function CreateBatchDialog({
           <button type="button" className="btn ghost" onClick={() => onClose(refused)} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className="btn" disabled={busy || (centres !== null && !centres.length)}>
+          <button type="submit" className="btn" disabled={busy || (centres !== null && !centres.length) || (wanted !== null && wanted !== n)}>
             {busy ? 'Creating…' : 'Create batch'}
           </button>
         </div>

@@ -5,6 +5,7 @@ import { moveText } from './ApprovalStageCell';
 /* Where a move took the student. */
 function sentTo(e: ApprovalEvent): string {
   if (e.action === 'REJECT') return `sent back to ${e.to.name}`;
+  if (e.action === 'MOVE') return `to ${e.to.name}`;
   if (e.to.stage === 'BATCH') return 'waiting for a batch';
   return e.to.stage === 'APPROVED' ? 'finally approved' : `sent to ${e.to.name}`;
 }
@@ -18,11 +19,12 @@ export default function ApprovalHistory({ events }: { events: ApprovalEvent[] })
         {events.map((e, i) => (
           <li key={`${e.at}-${i}`}>
             <div className="row">
-              <span className={`badge do-${e.action === 'REJECT' ? 'REJECTED' : 'APPROVED'}`}>{moveText(e)}</span>
+              <span className={`badge do-${e.action === 'REJECT' ? 'REJECTED' : e.action === 'MOVE' ? 'PENDING' : 'APPROVED'}`}>{moveText(e)}</span>
               <span className="fs13">{sentTo(e)}</span>
               <span className="hint">
                 {fmtDate(e.at)}
                 {e.by ? ` · ${e.by}` : ''}
+                {e.by && e.role ? ` (${e.role})` : ''}
               </span>
             </div>
             {e.reason ? <p className="fu-note-full">Reason: {e.reason}</p> : null}

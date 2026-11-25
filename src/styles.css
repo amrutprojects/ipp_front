@@ -1066,6 +1066,10 @@ textarea.val-source.one {
   margin-top: 4px;
   font-size: 12.5px;
 }
+/* Whether Sarthi has a batch. */
+.batch-sync {
+  margin-top: 4px;
+}
 /* In view while the list below is scrolled. */
 .batch-bar {
   position: sticky;

@@ -2,17 +2,18 @@ import { Link } from 'react-router-dom';
 import { fmtDate } from '../../components/ui';
 import type { Approval, ApprovalEvent } from '../../types';
 
-/* A move in words: an approval, being put into a batch (and sent to the Divisional Officer), or a rejection. */
+/* A move in words: an approval, being put into a batch (and sent to the Divisional Officer), a rejection, or changing hands. */
 export function moveText(e: ApprovalEvent): string {
   if (e.action === 'REJECT') return `Rejected by ${e.from.name}`;
+  if (e.action === 'MOVE') return `Moved from ${e.from.name}`;
   return e.from.stage === 'BATCH' ? 'Put into a batch' : `Approved by ${e.from.name}`;
 }
 
 /*
  * Approval stage (the list, a batch, and a student's page): after the Auditor (this panel) approves a submitted form it
- * waits for a batch; the batch goes to the Divisional Officer of its district → COEP → Head Office (skipped while its
- * approval is optional) → Admin (Admin Panel → Student Approval Stages), each approving or rejecting. A rejection sends the
- * student back one stage, in the same batch, with the reason shown here; Admin's approval is final (student register).
+ * waits for a batch; the batch goes to the Divisional Officer of its district → COEP → Head Office, or the Super Admin while
+ * Head Office approval is off (all in Sarthi), each approving or rejecting. A rejection sends the student back one stage, in
+ * the same batch, with the reason shown here; the last approval is final.
  * `waiting` = the form is submitted and with the Auditor; `batch` = name the student's batch (not on the batch's own page).
  */
 export default function ApprovalStageCell({ approval: a, waiting, batch = true }: { approval: Approval | null; waiting: boolean; batch?: boolean }) {

@@ -243,7 +243,7 @@ describe('Batch dates, delivery mode and technology (rules)', () => {
 
   it('counts the students who chose another center: by its id, else by its name', () => {
     const centre = { id: 'c1', name: 'Pune Centre' };
-    const picks = addPicks(STUDENTS, [], { size: 3, districtRequired: true });
+    const picks = addPicks(STUDENTS, [], { size: 3, sizes: {}, districtRequired: true });
     expect(choseOther(picks, centre)).toBe(1);
     expect(choseOther(picks, { id: 'c2', name: 'Baramati Centre' })).toBe(2);
     /* The same name in another district is another center; a student without a center chose none. */

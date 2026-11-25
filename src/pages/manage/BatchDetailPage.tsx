@@ -9,6 +9,7 @@ import ApprovalStageCell from './ApprovalStageCell';
 import { batchPlaces } from './BatchesPage';
 import { batchDates, deliveryLabel, NO_PLAN, otherCentreText, planChanges, planOf, technologyLabel } from './batchPlan';
 import BatchPlanFields, { checkPlan, useTechnologies } from './BatchPlanFields';
+import BatchSync from './BatchSync';
 import { BATCH_FIELDS, useActiveCentres } from './CreateBatchDialog';
 import { ManageShell } from './ManageLayout';
 
@@ -163,6 +164,7 @@ export default function BatchDetailPage() {
         Technology: <b>{technologyLabel(batch)}</b>
         {otherCentre ? ` · ${otherCentre}` : ''}
       </p>
+      <BatchSync batch={batch} onRetried={() => void load()} />
       {done ? <Notice tone="ok">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 

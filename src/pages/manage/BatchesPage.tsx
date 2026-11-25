@@ -4,6 +4,7 @@ import { api, type PageMeta } from '../../api';
 import { fmtDate, Notice } from '../../components/ui';
 import type { Batch, BatchPlace } from '../../types';
 import { batchDates, deliveryLabel } from './batchPlan';
+import BatchSync from './BatchSync';
 import { ManageShell } from './ManageLayout';
 
 const LIMIT = 25;
@@ -13,7 +14,7 @@ const PLACES: [BatchPlace, string][] = [
   ['DIVISION', 'Divisional Officer'],
   ['COEP', 'COEP'],
   ['HEAD_OFFICE', 'Head Office'],
-  ['ADMIN', 'Admin'],
+  ['ADMIN', 'Super Admin'],
   ['APPROVED', 'Final approved'],
   ['AUDITOR', 'Sent back'],
 ];
@@ -76,7 +77,9 @@ export default function BatchesPage() {
       <p className="hint" style={{ marginTop: -4 }}>
         To create a batch, select students in <Link to="/manage?application_stage=BATCH">Applicants (waiting for a batch)</Link> and choose
         Create batch.
-        {meta?.size ? ` A batch has exactly ${meta.size} student${meta.size === 1 ? '' : 's'} of one district (Settings → Batch size).` : ''}
+        {meta?.size
+          ? ` A batch has exactly ${meta.size} student${meta.size === 1 ? '' : 's'} of one district, or as many as the district's own size (Settings → Batch size).`
+          : ''}
       </p>
       {error ? <Notice tone="error">{error}</Notice> : null}
       <div className="toolbar">
@@ -128,7 +131,10 @@ export default function BatchesPage() {
                     {b.centre.code ? <div className="hint mono">{b.centre.code}</div> : null}
                   </td>
                   <td>{b.students}</td>
-                  <td>{batchPlaces(b)}</td>
+                  <td>
+                    {batchPlaces(b)}
+                    <BatchSync batch={b} onRetried={() => void load()} />
+                  </td>
                   <td>{b.rejected ? <span className="badge do-REJECTED">{b.rejected}</span> : '—'}</td>
                   <td className="nowrap">{batchDates(b)}</td>
                   <td>{deliveryLabel(b)}</td>

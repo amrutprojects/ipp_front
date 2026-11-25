@@ -14,7 +14,7 @@ import {
 import { useCanEdit } from '../../session';
 import ApprovalStageCell from './ApprovalStageCell';
 import ApproveDialog, { type ApproveTarget } from './ApproveDialog';
-import { addPicks, pickBlocked, pickedDistrict, toPick, type BatchPick } from './batchPicks';
+import { addPicks, isBatch, pickBlocked, pickedDistrict, sizeFor, toPick, type BatchPick } from './batchPicks';
 import CreateBatchDialog, { useBatchSize } from './CreateBatchDialog';
 import FollowUpDialog from './FollowUpDialog';
 import { ManageHeader, ManageNav } from './ManageLayout';
@@ -59,8 +59,11 @@ export default function ManagePage() {
   /* Students ticked for a new batch (approved, waiting for one): kept while the list is paged or filtered. */
   const [picks, setPicks] = useState<BatchPick[]>([]);
   const [batching, setBatching] = useState(false);
-  const { size: batchSize, districtRequired, failed: batchSizeFailed, reload: reloadBatchSize } = useBatchSize(canEdit);
-  const batchRules = { size: batchSize, districtRequired };
+  const { size: defaultSize, sizes, districtRequired, failed: batchSizeFailed, reload: reloadBatchSize } = useBatchSize(canEdit);
+  const batchRules = { size: defaultSize, sizes, districtRequired };
+  /* Of the district of the picks; the default before the first one. */
+  const batchSize = sizeFor(picks, batchRules);
+  const batchReady = isBatch(picks, batchRules);
   const [done, setDone] = useState('');
   const [search, setSearch] = useState('');
   const [text, setText] = useState(NO_TEXT);
@@ -233,7 +236,7 @@ export default function ManagePage() {
                   setDone('');
                   setBatching(true);
                 }}
-                disabled={batchSize === null || picks.length !== batchSize}
+                disabled={!batchReady}
                 title={
                   batchSize === null
                     ? 'The batch size is not loaded'
@@ -268,13 +271,16 @@ export default function ManagePage() {
               </b>{' '}
               {batchSize === null
                 ? null
-                : picks.length < batchSize
-                  ? `– select ${batchSize - picks.length} more.`
-                  : picks.length === batchSize
-                    ? '– ready: choose Create batch.'
+                : batchReady
+                  ? '– ready: choose Create batch.'
+                  : picks.length < batchSize
+                    ? `– select ${batchSize - picks.length} more.`
                     : `– unselect ${picks.length - batchSize}.`}
             </span>
-            <span className="hint">A batch has one district: {pickedDistrict(picks) ?? 'the one of its centre'}</span>
+            <span className="hint">
+              A batch has one district: {pickedDistrict(picks) ?? 'the one of its centre'}
+              {pickedDistrict(picks) && batchSize !== defaultSize ? ` (its own batch size: ${batchSize})` : ''}
+            </span>
             <span className="spacer" />
             <button type="button" className="link-btn" onClick={() => setPicks([])}>
               Clear selection
@@ -539,6 +545,7 @@ export default function ManagePage() {
       {batching && picks.length ? (
         <CreateBatchDialog
           students={picks}
+          rules={batchRules}
           onClose={(refused) => {
             setBatching(false);
             /* Refused (e.g. a student is no longer waiting for a batch): the list shows how things stand now. */

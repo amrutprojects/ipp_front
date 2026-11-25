@@ -3,7 +3,15 @@ import { api, ApiError } from '../../api';
 import { DEFAULT_SUPPORT_MESSAGE, SupportMessage } from '../../components/SupportMessage';
 import { Field, fmtDate, Notice } from '../../components/ui';
 import { useCanEdit } from '../../session';
-import { HELP_FIELDS, type BatchSettings, type HelpSettings, type SupportSettings, type WelcomeSettings } from '../../types';
+import {
+  HELP_FIELDS,
+  type BatchSettings,
+  type FilterChoice,
+  type HelpSettings,
+  type ListFilterOptions,
+  type SupportSettings,
+  type WelcomeSettings,
+} from '../../types';
 import {
   helpIssues,
   supportIssues,
@@ -12,6 +20,7 @@ import {
   type SupportForm,
   type WelcomeForm,
 } from '../../validation';
+import LinkSection from './LinkSection';
 import { ManageShell } from './ManageLayout';
 
 /*
@@ -472,30 +481,72 @@ function HelpSection() {
   );
 }
 
-/* ---------- Batch size: the exact number of students of a new batch (Batches) ---------- */
+/* ---------- Batch size: the exact number of students of a new batch (Batches), and the districts with another one ---------- */
+
+interface SizeForm {
+  size: string;
+  /* null = an older API: there is one size only. */
+  districts: { district_id: string; name: string; size: string }[] | null;
+}
+const sizeIssue = (text: string) => {
+  const n = Number(text);
+  return text.trim() && Number.isInteger(n) && n >= 1 && n <= 100 ? '' : 'Enter a whole number from 1 to 100';
+};
+
+/* The active districts, to give one a size of its own; null = not loaded. */
+function useDistricts(wanted: boolean) {
+  const [districts, setDistricts] = useState<FilterChoice[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!wanted) return;
+    let live = true;
+    api<ListFilterOptions>('/manage/filters', { realm: 'manage' })
+      .then((r) => live && setDistricts(r.data.districts))
+      .catch(() => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [wanted]);
+  return { districts, failed };
+}
 
 function BatchSection() {
   const canEdit = useCanEdit();
-  const state = useSettingsForm<BatchSettings, { size: string }>({
+  const state = useSettingsForm<BatchSettings, SizeForm>({
     path: '/manage/settings/batch',
-    blank: { size: '' },
-    toForm: (saved) => ({ size: String(saved.size) }),
-    toBody: (form) => ({ size: Number(form.size) }),
-    issues: (form) => {
-      const n = Number(form.size);
-      return { size: form.size.trim() && Number.isInteger(n) && n >= 1 && n <= 100 ? '' : 'Enter a whole number from 1 to 100' };
-    },
+    blank: { size: '', districts: null },
+    toForm: (saved) => ({
+      size: String(saved.size),
+      districts: saved.districts?.map((d) => ({ ...d, size: String(d.size) })) ?? null,
+    }),
+    toBody: (form) => ({
+      size: Number(form.size),
+      ...(form.districts ? { districts: form.districts.map((d) => ({ district_id: d.district_id, size: Number(d.size) })) } : {}),
+    }),
+    issues: (form) => ({
+      size: sizeIssue(form.size),
+      ...Object.fromEntries((form.districts ?? []).map((d, i) => [`districts.${i}.size`, sizeIssue(d.size)])),
+    }),
     saved: 'Batch size saved.',
   });
+  const { form, errors } = state;
+  const list = form.districts;
+  const { districts, failed } = useDistricts(canEdit && !!list);
+  const [adding, setAdding] = useState('');
+  const free = (districts ?? []).filter((d) => !list?.some((x) => x.district_id === d.id));
+  const change = (next: NonNullable<SizeForm['districts']>, ...clear: string[]) =>
+    state.edit((f) => ({ ...f, districts: next }), 'districts', ...clear);
+  const allKeys = (list ?? []).flatMap((_d, i) => [`districts.${i}.size`, `districts.${i}.district_id`]);
+
   return (
     <SettingsCard
       id="batch"
       title="Batch size"
-      sub="Every new batch has exactly this many students, all of one district. Existing batches are not changed."
+      sub="Every new batch has exactly this many students, all of one district. A district can have a size of its own. Existing batches are not changed."
       state={state}
       unsaved="Not saved yet: batches use the default size."
     >
-      <Field id="batch-size" label="Number of students in one batch (exact, 1–100)" error={state.errors.size}>
+      <Field id="batch-size" label="Number of students in one batch (exact, 1–100)" error={errors.size}>
         <input
           id="batch-size"
           className="inp"
@@ -505,12 +556,120 @@ function BatchSection() {
           max={100}
           step={1}
           style={{ maxWidth: 160 }}
-          value={state.form.size}
+          value={form.size}
           disabled={!canEdit}
           onChange={(e) => state.edit((f) => ({ ...f, size: e.target.value }), 'size')}
-          aria-invalid={!!state.errors.size || undefined}
+          aria-invalid={!!errors.size || undefined}
         />
       </Field>
+      {list ? (
+        <fieldset className="field radios mt16">
+          <legend className="label">Districts with another batch size</legend>
+          {list.length ? (
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>District</th>
+                    <th>Students in one batch</th>
+                    {canEdit ? <th>Actions</th> : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((d, i) => {
+                    const issue = errors[`districts.${i}.size`] || errors[`districts.${i}.district_id`];
+                    return (
+                      <tr key={d.district_id}>
+                        <td>{d.name}</td>
+                        <td>
+                          <input
+                            className="inp"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={100}
+                            step={1}
+                            style={{ maxWidth: 120 }}
+                            aria-label={`Batch size of ${d.name}`}
+                            aria-invalid={!!issue || undefined}
+                            aria-describedby={issue ? `batch-district-${i}-err` : undefined}
+                            value={d.size}
+                            disabled={!canEdit}
+                            onChange={(e) =>
+                              change(
+                                list.map((x, j) => (j === i ? { ...x, size: e.target.value } : x)),
+                                `districts.${i}.size`,
+                                `districts.${i}.district_id`,
+                              )
+                            }
+                          />
+                          {issue ? (
+                            <span className="err" role="alert" id={`batch-district-${i}-err`}>
+                              {issue}
+                            </span>
+                          ) : null}
+                        </td>
+                        {canEdit ? (
+                          <td>
+                            <button
+                              type="button"
+                              className="btn ghost sm"
+                              aria-label={`Remove the batch size of ${d.name}`}
+                              onClick={() => change(list.filter((_x, j) => j !== i), ...allKeys)}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="hint">None: every district uses the number above.</p>
+          )}
+          {errors.districts ? (
+            <span className="err" role="alert">
+              {errors.districts}
+            </span>
+          ) : null}
+          {canEdit ? (
+            <div className="row mt8">
+              <select
+                className="inp"
+                style={{ maxWidth: 260 }}
+                aria-label="District to add"
+                value={adding}
+                disabled={!districts}
+                onChange={(e) => setAdding(e.target.value)}
+              >
+                <option value="">{districts ? 'Choose a district' : failed ? 'Could not load the districts' : 'Loading…'}</option>
+                {free.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn ghost sm"
+                disabled={!adding}
+                onClick={() => {
+                  const d = free.find((x) => x.id === adding);
+                  if (!d) return;
+                  change([...list, { district_id: d.id, name: d.name, size: form.size }].sort((a, b) => a.name.localeCompare(b.name)), ...allKeys);
+                  setAdding('');
+                }}
+              >
+                + Add district
+              </button>
+              <span className="hint">Choose Save to apply the changes.</span>
+            </div>
+          ) : null}
+        </fieldset>
+      ) : null}
     </SettingsCard>
   );
 }
@@ -519,6 +678,7 @@ export default function SettingsPage() {
   return (
     <ManageShell>
       <BatchSection />
+      <LinkSection />
       <SupportSection />
       <WelcomeSection />
       <HelpSection />

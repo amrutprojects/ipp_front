@@ -377,10 +377,9 @@ export interface Applicant {
 }
 
 /*
- * Approval stages (amrut-kalash-api EDP_APPROVAL_STAGES): after the Auditor (this panel) approves, the form waits for a
- * batch (BATCH); the batch goes to the Divisional Officer (of its district) → COEP → Head Office (skipped while its
- * approval is optional) → Admin; APPROVED = final (then in the student register). A rejection sends the one student back
- * one stage, still in the same batch.
+ * Approval stages: after the Auditor (this panel) approves, the form waits for a batch (BATCH); the batch goes to Sarthi, to the
+ * Divisional Officer (of its district) → COEP → Head Office, or the Super Admin (ADMIN) while Head Office approval is off;
+ * APPROVED = final. A rejection sends the one student back one stage, still in the same batch.
  */
 export type ApprovalStage = 'BATCH' | 'DIVISION' | 'COEP' | 'HEAD_OFFICE' | 'ADMIN' | 'APPROVED';
 export type StagePoint = 'AUDITOR' | ApprovalStage;
@@ -420,12 +419,15 @@ export interface ListFilterOptions {
   stages: { code: ApplicationStage; label: string }[];
 }
 export interface ApprovalEvent {
-  action: 'APPROVE' | 'REJECT';
+  /* MOVE = the final decision changed hands (Head Office approval switched on or off in Sarthi). */
+  action: 'APPROVE' | 'REJECT' | 'MOVE';
   from: { stage: StagePoint; name: string };
   to: { stage: StagePoint; name: string };
   /* A rejection's reason. */
   reason: string | null;
   by: string | null;
+  /* The officer's role in Sarthi (absent or null: somebody of this panel). */
+  role?: string | null;
   at: string;
 }
 export interface Approval {
@@ -478,6 +480,8 @@ export interface Batch {
   stages: Record<BatchPlace, number>;
   /* Students whose latest move was a rejection, not approved again yet. */
   rejected: number;
+  /* Whether Sarthi has the batch as it is now; null = nothing was sent of it (absent from an older API). */
+  sync?: { status: 'SENT' | 'WAITING' | 'FAILED'; error: string | null; sent_at: string | null } | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -503,11 +507,42 @@ export interface BatchMember {
 export interface BatchDetail extends Batch {
   members: BatchMember[];
 }
+/* A district with a batch size of its own. */
+export interface DistrictBatchSize {
+  district_id: string;
+  name: string;
+  size: number;
+}
 /* GET / PUT /manage/settings/batch: the exact number of students of a new batch. */
 export interface BatchSettings extends SavedMeta {
   size: number;
+  /* The districts whose batches have another size (absent from an older API). */
+  districts?: DistrictBatchSize[];
   /* Whether each student of a batch must have a district: the form requires it (absent from an older API: yes). */
   district_required?: boolean;
+}
+/* GET /manage/link: the connection to Sarthi, where the officers decide, and the messages that are not sent. */
+export interface LinkItem {
+  id: string;
+  kind: 'BATCH' | 'BATCH_UPDATE' | 'RESUBMIT' | 'UPDATE';
+  batch: { id: string; code: string; name: string };
+  student: { id: string; name: string; registration_id: string | null } | null;
+  status: 'PENDING' | 'FAILED';
+  attempts: number;
+  next_attempt_at: string;
+  error: string | null;
+  created_at: string;
+}
+export interface LinkStatus {
+  enabled: boolean;
+  configured: boolean;
+  host: string | null;
+  pending: number;
+  failed: number;
+  last_sent_at: string | null;
+  last_received_at: string | null;
+  /* Oldest first, at most 100. */
+  items: LinkItem[];
 }
 /* The Auditor's verification of one uploaded document: who and when. */
 export interface DocumentCheck {
