@@ -45,7 +45,6 @@ const field = (over: Partial<MasterField>): MasterField => ({
   label_mr: 'पहिले नाव',
   required: true,
   type: 'TEXT',
-  core: true,
   custom: false,
   order: 1,
   options_kind: null,
@@ -55,13 +54,32 @@ const field = (over: Partial<MasterField>): MasterField => ({
   ...over,
 });
 const FIELDS: MasterField[] = [
-  field({}),
-  field({ id: 'f2', key: 'gender', label_en: 'Gender', label_mr: 'लिंग', core: false, type: 'DROPDOWN', options_kind: 'GENDER', order: 2 }),
-  field({ id: 'f3', key: 'x_shift', label_en: 'Preferred shift', label_mr: null, core: false, custom: true, required: false, type: 'DROPDOWN', options_kind: 'FIELD:x_shift', order: 3 }),
-  field({ id: 'f6', key: 'x_about', label_en: 'About you', label_mr: null, core: false, custom: true, required: false, type: 'TEXTAREA', order: 4 }),
+  field({ types: ['TEXT'] }),
+  field({ id: 'f2', key: 'gender', label_en: 'Gender', label_mr: 'लिंग', type: 'DROPDOWN', types: ['DROPDOWN', 'RADIO'], options_kind: 'GENDER', order: 2 }),
+  field({ id: 'f3', key: 'x_shift', label_en: 'Preferred shift', label_mr: null, custom: true, required: false, type: 'DROPDOWN', options_kind: 'FIELD:x_shift', order: 3 }),
+  field({ id: 'f6', key: 'x_about', label_en: 'About you', label_mr: null, custom: true, required: false, type: 'TEXTAREA', order: 4 }),
   field({ id: 'f4', key: 'technology', step: 2, label_en: 'Technology', label_mr: 'तंत्रज्ञान', type: 'DROPDOWN', options_kind: 'TECHNOLOGY' }),
-  field({ id: 'f5', key: 'qualification_board', step: 2, label_en: 'College Name', label_mr: null, core: false, order: 2 }),
+  field({ id: 'f5', key: 'qualification_board', step: 2, label_en: 'College Name', label_mr: null, types: ['TEXT', 'TEXTAREA', 'NUMBER', 'DROPDOWN'], order: 2 }),
+  /* Given choices of its own. */
+  field({
+    id: 'f7',
+    key: 'taluka',
+    step: 2,
+    label_en: 'Taluka',
+    label_mr: null,
+    type: 'DROPDOWN',
+    by_type: true,
+    options_kind: 'FIELD:taluka',
+    types: ['TEXT', 'DROPDOWN'],
+    validation: { rules: [], custom: [{ kind: 'REGEX', source: '.+', message_en: 'No', message_mr: null }] },
+    order: 3,
+  }),
 ];
+/* As the page lists them: by step, then order. */
+const inOrder = (a: string, b: string) => {
+  const of = (name: string) => FIELDS.find((f) => name === `${f.label_en}: active`)!;
+  return of(a).step - of(b).step || of(a).order - of(b).order;
+};
 const DISTRICT_TECH: DistrictTechnologies[] = [
   { district_id: 'pune', district: 'Pune', all: true, codes: [] },
   { district_id: 'satara', district: 'Satara', all: false, codes: ['T03', 'T09'] },
@@ -133,7 +151,9 @@ describe('Masters: the tab', () => {
       ['Technologies', '/manage/masters/technologies'],
       ['Documents', '/manage/masters/documents'],
       ['Form fields', '/manage/masters/fields'],
+      ['States', '/manage/masters/states'],
       ['Districts', '/manage/masters/districts'],
+      ['Talukas', '/manage/masters/talukas'],
       ['Center Master', '/manage/centres'],
     ]);
     /* Center Master has no tab of its own any more. */
@@ -315,27 +335,79 @@ describe('Masters: documents', () => {
 });
 
 describe('Masters: form fields', () => {
-  it('lists the fields by step; a core field is locked and says why', async () => {
-    mockApi();
+  it('lists the fields by step; every one can be switched off, none is locked', async () => {
+    const calls = mockApi();
     renderAt('/manage/masters/fields');
     const step1 = await screen.findByRole('region', { name: 'Step 1 – Basic Details' });
-    const first = within(step1).getByRole('row', { name: /First Name/ });
-    expect(first).toHaveTextContent('Core');
-    expect(within(first).queryByRole('switch')).not.toBeInTheDocument();
-    expect(within(first).getByText('Core').closest('.core-mark')).toHaveAttribute('title', expect.stringMatching(/the program needs it/));
-    expect(within(step1).getByRole('switch', { name: 'Gender: active' })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/core/i);
+    expect(screen.getAllByRole('switch').map((s) => s.getAttribute('aria-label'))).toEqual(FIELDS.map((f) => `${f.label_en}: active`).sort(inOrder));
+    await userEvent.click(within(step1).getByRole('switch', { name: 'First Name: active' }));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'First Name: active' })).toHaveAttribute('aria-checked', 'false'));
+    expect(writes(calls)).toEqual([['PATCH', '/manage/fields/f1', { is_active: false }]]);
     expect(within(step1).getAllByText('Own field')).toHaveLength(2);
     expect(within(step1).queryByRole('button', { name: 'Delete Gender' })).not.toBeInTheDocument();
     expect(within(step1).getByRole('button', { name: 'Delete Preferred shift' })).toBeInTheDocument();
     /* Where the choices of a dropdown are managed. */
     expect(screen.getByRole('link', { name: 'Choices of Gender' })).toHaveAttribute('href', '/manage/masters/lists/GENDER');
     expect(screen.getByRole('link', { name: 'Choices of Technology' })).toHaveAttribute('href', '/manage/masters/technologies');
+    /* Choices of its own, also of a field of the program; its checks are said too. */
+    await userEvent.click(screen.getByRole('button', { name: 'Choices of Taluka' }));
+    expect(await screen.findByRole('region', { name: 'Choices of Taluka' })).toBeInTheDocument();
+    expect(calls.some((c) => c.path === '/manage/masters/FIELD%3Ataluka')).toBe(true);
+    expect(screen.getByText('Checks: 1 expression')).toBeInTheDocument();
+  });
 
-    await userEvent.click(within(step1).getByRole('button', { name: 'Edit First Name' }));
-    const dialog = screen.getByRole('dialog', { name: 'Edit First Name' });
-    expect(dialog).toHaveTextContent('Core field: the program needs it, so it is always asked.');
-    expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(within(dialog).queryByLabelText(/^Type/)).not.toBeInTheDocument();
+  it('a field of the program is edited in full: step, type, validation, required and active', async () => {
+    const calls = mockApi();
+    renderAt('/manage/masters/fields');
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit First Name' }));
+    let dialog = screen.getByRole('dialog', { name: 'Edit First Name' });
+    /* Its type stays, and why; what is done without it. */
+    const typeOf = () => within(dialog).getByLabelText(/^Type/) as HTMLSelectElement;
+    const types = () => [...typeOf().options].map((o) => o.value);
+    expect(typeOf()).toBeDisabled();
+    expect(typeOf()).toHaveAccessibleDescription('The type of this field stays: its answers are used elsewhere too.');
+    expect(dialog).toHaveTextContent("Not asked: the name of the student's account is used.");
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^Step/), '2');
+    await userEvent.type(within(dialog).getByLabelText('Minimum characters'), '2');
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Required' }));
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Active: asked in the form' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByText('Field First Name saved.');
+
+    /* A list: one choice of it, as a dropdown or radio buttons. */
+    await userEvent.click(screen.getByRole('button', { name: 'Edit Gender' }));
+    dialog = screen.getByRole('dialog', { name: 'Edit Gender' });
+    expect(types()).toEqual(['DROPDOWN', 'RADIO']);
+    await userEvent.selectOptions(typeOf(), 'RADIO');
+    expect(within(dialog).queryByRole('group', { name: /^Choices/ })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByText('Field Gender saved.');
+
+    /* Any other: every type; one with choices is given them at once. */
+    await userEvent.click(screen.getByRole('button', { name: 'Edit College Name' }));
+    dialog = screen.getByRole('dialog', { name: 'Edit College Name' });
+    expect(types()).toEqual(['TEXT', 'TEXTAREA', 'NUMBER', 'DROPDOWN']);
+    await userEvent.selectOptions(typeOf(), 'DROPDOWN');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(within(dialog).getByText('Add at least one choice')).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByLabelText('Choice 1 (English)'), 'Government College');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByText('Field College Name saved.');
+    expect(writes(calls)).toEqual([
+      ['PATCH', '/manage/fields/f1', { required: false, is_active: false, step: 2, validation: { rules: [{ type: 'min_length', value: 2 }], custom: [] } }],
+      ['PATCH', '/manage/fields/f2', { type: 'RADIO' }],
+      ['PATCH', '/manage/fields/f5', { type: 'DROPDOWN', options: [{ name_en: 'Government College' }] }],
+    ]);
+  });
+
+  it('an older API that does not say the types: a field of the program keeps its own', async () => {
+    mockApi();
+    renderAt('/manage/masters/fields');
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Technology' }));
+    const type = within(screen.getByRole('dialog', { name: 'Edit Technology' })).getByLabelText(/^Type/) as HTMLSelectElement;
+    expect([...type.options].map((o) => o.value)).toEqual(['DROPDOWN']);
+    expect(type).toBeDisabled();
   });
 
   it('renames a field in both languages, makes one optional and gives it a help text; only what changed is sent', async () => {

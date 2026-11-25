@@ -4,7 +4,7 @@ import { Field, Notice } from '../../../components/ui';
 import { useCanEdit } from '../../../session';
 import type { DocumentKind, MasterDocument } from '../../../types';
 import { MastersShell } from '../ManageLayout';
-import { ConfirmDelete, FormDialog, InUse, messageOf, orderIssue, StatusSwitch } from './shared';
+import { ConfirmDelete, FormDialog, InUse, messageOf, orderIssue, StatusSwitch, ViewOnlyNotice } from './shared';
 
 const KIND_LABEL: Record<DocumentKind, string> = { DOCUMENT: 'Document (PDF, JPG, PNG)', VIDEO: 'Video (MP4)' };
 
@@ -44,8 +44,8 @@ function DocumentDialog({ row, onClose, onSaved }: { row: MasterDocument | null;
       title={row ? `Edit ${row.name_en}` : 'Add a document'}
       submit={row ? 'Save' : 'Add'}
       check={() => ({
-        name_en: !nameEn.trim() ? 'English name is required' : nameEn.trim().length > 200 ? 'English name must be at most 200 characters' : '',
-        name_mr: nameMr.trim().length > 200 ? 'Marathi name must be at most 200 characters' : '',
+        name_en: !nameEn.trim() ? 'English name is required' : nameEn.trim().length > 150 ? 'English name must be at most 150 characters' : '',
+        name_mr: nameMr.trim().length > 150 ? 'Marathi name must be at most 150 characters' : '',
         order: orderIssue(order),
       })}
       save={save}
@@ -54,10 +54,10 @@ function DocumentDialog({ row, onClose, onSaved }: { row: MasterDocument | null;
       {(errors) => (
         <div className="grid one">
           <Field id="d-name-en" label="Name (English)" error={errors.name_en}>
-            <input id="d-name-en" className="inp" maxLength={200} value={nameEn} onChange={(e) => setNameEn(e.target.value)} data-autofocus />
+            <input id="d-name-en" className="inp" maxLength={150} value={nameEn} onChange={(e) => setNameEn(e.target.value)} data-autofocus />
           </Field>
           <Field id="d-name-mr" label="Name (Marathi)" required={false} error={errors.name_mr} hint="Left blank: the English name is shown in Marathi too.">
-            <input id="d-name-mr" className="inp" maxLength={200} lang="mr" value={nameMr} onChange={(e) => setNameMr(e.target.value)} />
+            <input id="d-name-mr" className="inp" maxLength={150} lang="mr" value={nameMr} onChange={(e) => setNameMr(e.target.value)} />
           </Field>
           {row ? null : (
             <Field id="d-kind" label="File" error={errors.kind}>
@@ -143,6 +143,7 @@ export default function DocumentsMasterPage() {
       <p className="hint" style={{ marginTop: -4 }}>
         What students upload in step 3, in this order. A document that is switched off is no longer asked; files already uploaded stay.
       </p>
+      {!canEdit ? <ViewOnlyNotice /> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
       {done ? <Notice tone="ok">{done}</Notice> : null}
       {!rows && !error ? <div className="loading">Loading…</div> : null}

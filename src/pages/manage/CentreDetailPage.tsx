@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api';
 import { fmtDate, Notice } from '../../components/ui';
 import { useCanEdit } from '../../session';
 import type { Centre } from '../../types';
+import { CENTRE_DELETE_NOTE } from './CentresPage';
 import CentreStatusDialog from './CentreStatusDialog';
 import { MastersShell } from './ManageLayout';
+import { ConfirmDelete } from './masters/shared';
 
-/* One centre, read-only, with Edit and Activate / Deactivate for an admin. */
+/* One centre, read-only, with Edit, Activate / Deactivate and Delete for an admin. */
 export default function CentreDetailPage() {
   const { id = '' } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const canEdit = useCanEdit();
   const [flash, setFlash] = useState<string>(() => (location.state as { flash?: string } | null)?.flash ?? '');
   const [centre, setCentre] = useState<Centre | null>(null);
   const [error, setError] = useState('');
   const [toggling, setToggling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -70,6 +74,16 @@ export default function CentreDetailPage() {
                 <button type="button" className={centre.isActive ? 'btn danger sm' : 'btn sm'} onClick={() => setToggling(true)}>
                   {centre.isActive ? 'Deactivate' : 'Activate'}
                 </button>
+                <button
+                  type="button"
+                  className="btn danger sm"
+                  onClick={() => {
+                    setFlash('');
+                    setDeleting(true);
+                  }}
+                >
+                  Delete
+                </button>
               </>
             ) : null}
           </div>
@@ -107,6 +121,17 @@ export default function CentreDetailPage() {
             setCentre(updated);
             setFlash(updated.isActive ? 'Center activated.' : 'Center deactivated.');
           }}
+        />
+      ) : null}
+      {deleting && centre && canEdit ? (
+        <ConfirmDelete
+          name={centre.name}
+          note={CENTRE_DELETE_NOTE}
+          remove={async () => {
+            await api(`/manage/centres/${encodeURIComponent(centre.id)}`, { method: 'DELETE', realm: 'manage' });
+            navigate('/manage/centres', { replace: true, state: { flash: `Center ${centre.name} deleted.` } });
+          }}
+          onClose={() => setDeleting(false)}
         />
       ) : null}
     </MastersShell>

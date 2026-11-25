@@ -225,6 +225,41 @@ describe('Create batch (tracking panel)', () => {
     expect(within(row('Asha Kulkarni')).getByText('A batch has one district: Satara')).toBeInTheDocument();
   });
 
+  it('takes students without a district while the form does not require one; alone they are of the centre\'s district', async () => {
+    const calls = mockApi({
+      size: () => json(200, { data: { size: 1, updated_at: null, updated_by: null, district_required: false } }),
+      create: (body) => json(201, { data: { ...DETAIL, name: (body as { name: string }).name, students: 1, district: { id: PUNE, name: 'Pune' } } }),
+    });
+    renderAt('/manage');
+    await screen.findByText('Omkar Shinde');
+    await waitFor(() => expect(box('Omkar Shinde')).toBeEnabled());
+    await userEvent.click(box('Omkar Shinde'));
+    expect(screen.getByRole('group', { name: 'Selected for a batch' })).toHaveTextContent('A batch has one district: the one of its centre');
+    await userEvent.click(createButton(1, 1));
+    const dialog = screen.getByRole('dialog', { name: 'Create a batch of 1 student' });
+    expect(dialog).toHaveTextContent('the batch is sent to the Divisional Officer of the district of its centre. Its students cannot be changed after that.');
+    await userEvent.type(within(dialog).getByLabelText(/Batch name/), 'Open batch');
+    await waitFor(() => expect(within(dialog).getByRole('option', { name: /Baramati Centre/ })).toBeInTheDocument());
+    await userEvent.selectOptions(within(dialog).getByLabelText(/Centre/), 'c2');
+    expect(dialog).toHaveTextContent('the Divisional Officer of Pune.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create batch' }));
+    expect(await screen.findByText('Batch "Open batch" created with 1 student and sent to the Divisional Officer of Pune.')).toBeInTheDocument();
+    expect(calls.find((c) => c.method === 'POST')).toMatchObject({ body: { name: 'Open batch', centre_id: 'c2', ids: ['s4'] } });
+  });
+
+  it('students without a district go with those of one, never with two districts', async () => {
+    mockApi({ size: () => json(200, { data: { size: 3, updated_at: null, updated_by: null, district_required: false } }) });
+    renderAt('/manage');
+    await screen.findByText('Omkar Shinde');
+    await waitFor(() => expect(box('Omkar Shinde')).toBeEnabled());
+    await userEvent.click(box('Omkar Shinde'));
+    expect(box('Meera Joshi')).toBeEnabled();
+    await userEvent.click(box('Asha Kulkarni'));
+    expect(screen.getByRole('group', { name: 'Selected for a batch' })).toHaveTextContent('A batch has one district: Pune');
+    expect(box('Meera Joshi')).toHaveAttribute('title', 'A batch has one district: Pune');
+    expect(box('Nikhil Deshpande')).toBeEnabled();
+  });
+
   it('keeps the selection while paging and filtering, stops at the batch size, and can be cleared', async () => {
     const calls = mockApi();
     renderAt('/manage');
@@ -411,6 +446,8 @@ describe('Batches (tracking panel)', () => {
       'Students',
       'Where it is now',
       'Rejected',
+      'Dates',
+      'Delivery',
       'Created',
       'Actions',
     ]);

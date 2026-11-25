@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, type PageMeta } from '../../api';
 import { fmtDate, Notice } from '../../components/ui';
 import type { Batch, BatchPlace } from '../../types';
+import { batchDates, deliveryLabel } from './batchPlan';
 import { ManageShell } from './ManageLayout';
 
 const LIMIT = 25;
@@ -25,7 +26,7 @@ export const batchPlaces = (b: Batch) =>
 /*
  * Batches (/manage/batches): groups of students of one district, at a Center Master centre, that go through the approval
  * stages together. A batch is created from the Applicants list (select students waiting for a batch → Create batch) and is
- * viewed, or its name and centre changed, here.
+ * viewed, or its name, centre, dates, delivery mode and technology changed, here.
  */
 export default function BatchesPage() {
   const [rows, setRows] = useState<Batch[]>([]);
@@ -100,6 +101,8 @@ export default function BatchesPage() {
               <th>Students</th>
               <th>Where it is now</th>
               <th>Rejected</th>
+              <th>Dates</th>
+              <th>Delivery</th>
               <th>Created</th>
               <th>Actions</th>
             </tr>
@@ -107,7 +110,7 @@ export default function BatchesPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="center muted" style={{ padding: 28 }}>
+                <td colSpan={11} className="center muted" style={{ padding: 28 }}>
                   {loading ? 'Loading…' : query ? 'No batches match.' : 'No batches yet.'}
                 </td>
               </tr>
@@ -117,6 +120,7 @@ export default function BatchesPage() {
                   <td>{(page - 1) * LIMIT + i + 1}</td>
                   <td>
                     <b>{b.name}</b>
+                    {b.code ? <div className="hint mono">{b.code}</div> : null}
                   </td>
                   <td>{b.district?.name ?? '—'}</td>
                   <td>
@@ -126,6 +130,8 @@ export default function BatchesPage() {
                   <td>{b.students}</td>
                   <td>{batchPlaces(b)}</td>
                   <td>{b.rejected ? <span className="badge do-REJECTED">{b.rejected}</span> : '—'}</td>
+                  <td className="nowrap">{batchDates(b)}</td>
+                  <td>{deliveryLabel(b)}</td>
                   <td className="nowrap">
                     {fmtDate(b.created_at)}
                     {b.created_by ? <div className="hint">{b.created_by}</div> : null}

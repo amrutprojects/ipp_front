@@ -2,25 +2,23 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../api';
 import { Field, Notice, useRemoteList } from '../../../components/ui';
 import { useCanEdit } from '../../../session';
-import type { GeoRef } from '../../../types';
+import type { GeoRef, MasterDistrict } from '../../../types';
 import { MastersShell } from '../ManageLayout';
-import { ConfirmDelete, FormDialog, InUse, messageOf, StatusSwitch } from './shared';
+import { ConfirmDelete, FormDialog, InUse, messageOf, StatusSwitch, ViewOnlyNotice } from './shared';
 
-interface District {
-  id: string;
-  name: string;
-  code: string;
-  state: string;
-  is_active: boolean;
-  in_use: boolean;
-}
-
-/* Add or edit a district: its name and code, and for a new one its state. */
-function DistrictDialog({ row, onClose, onSaved }: { row: District | null; onClose: () => void; onSaved: (message: string) => void }) {
+/* Add or edit a district: its name, code and state. */
+function DistrictDialog({ row, onClose, onSaved }: { row: MasterDistrict | null; onClose: () => void; onSaved: (message: string) => void }) {
   const [name, setName] = useState(row?.name ?? '');
   const [code, setCode] = useState(row?.code ?? '');
-  const [stateId, setStateId] = useState('');
-  const states = useRemoteList<GeoRef>(row ? null : '/geography/states');
+  /* null = not chosen here: a new district's default, an edited one's own. */
+  const [stateId, setStateId] = useState<string | null>(null);
+  const states = useRemoteList<GeoRef>('/geography/states');
+  /* The edited district's state (an older API gives only its name); it stays selectable when it is inactive. */
+  const own = row ? (row.state_id ?? states.items.find((s) => s.name === row.state)?.id ?? '') : '';
+  const stateItems =
+    row && states.status === 'ok' && !states.items.some((s) => s.id === own)
+      ? [...states.items, { id: own, name: `${row.state || 'Current state'} (inactive)`, code: '' }]
+      : states.items;
   const save = async () => {
     if (!row) {
       await api('/manage/districts', {
@@ -34,6 +32,7 @@ function DistrictDialog({ row, onClose, onSaved }: { row: District | null; onClo
     const body: Record<string, unknown> = {};
     if (name.trim() !== row.name) body.name = name.trim();
     if (code.trim().toUpperCase() !== row.code) body.code = code.trim().toUpperCase();
+    if (stateId !== null && stateId !== own) body.state_id = stateId;
     if (Object.keys(body).length) await api(`/manage/districts/${encodeURIComponent(row.id)}`, { method: 'PATCH', realm: 'manage', body });
     onSaved(`District ${name.trim()} saved.`);
   };
@@ -57,11 +56,11 @@ function DistrictDialog({ row, onClose, onSaved }: { row: District | null; onClo
             <input id="dist-code" className="inp mono" maxLength={20} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
           </Field>
           {/* One state (or none to choose from): the API's own. */}
-          {!row && states.items.length > 1 ? (
+          {stateItems.length > 1 ? (
             <Field id="dist-state" label="State" required={false} error={errors.state_id ?? errors.stateId}>
-              <select id="dist-state" className="inp" value={stateId} onChange={(e) => setStateId(e.target.value)}>
-                <option value="">Maharashtra (default)</option>
-                {states.items.map((s) => (
+              <select id="dist-state" className="inp" value={stateId ?? own} onChange={(e) => setStateId(e.target.value)}>
+                {row ? null : <option value="">Maharashtra (default)</option>}
+                {stateItems.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
@@ -75,19 +74,20 @@ function DistrictDialog({ row, onClose, onSaved }: { row: District | null; onClo
   );
 }
 
-/* Masters → Districts: the districts the form offers (the same District Master as the admin panel's). */
+/* Masters → Districts: the districts the form offers. */
 export default function DistrictsPage() {
   const canEdit = useCanEdit();
-  const [rows, setRows] = useState<District[] | null>(null);
+  const [rows, setRows] = useState<MasterDistrict[] | null>(null);
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<'' | 'ACTIVE' | 'INACTIVE'>('');
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
-  const [editing, setEditing] = useState<District | 'new' | null>(null);
-  const [deleting, setDeleting] = useState<District | null>(null);
+  const [editing, setEditing] = useState<MasterDistrict | 'new' | null>(null);
+  const [deleting, setDeleting] = useState<MasterDistrict | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await api<District[]>('/manage/districts', { realm: 'manage' });
+      const res = await api<MasterDistrict[]>('/manage/districts', { realm: 'manage' });
       setRows(res.data);
       setError('');
     } catch (e) {
@@ -104,7 +104,7 @@ export default function DistrictsPage() {
     setDone(message);
     void load();
   };
-  const setActive = async (d: District, on: boolean) => {
+  const setActive = async (d: MasterDistrict, on: boolean) => {
     setDone('');
     setError('');
     try {
@@ -116,7 +116,12 @@ export default function DistrictsPage() {
   };
 
   const needle = search.trim().toLowerCase();
-  const shown = rows?.filter((d) => !needle || d.name.toLowerCase().includes(needle) || d.code.toLowerCase().includes(needle)) ?? [];
+  const shown =
+    rows?.filter(
+      (d) =>
+        (!needle || d.name.toLowerCase().includes(needle) || d.code.toLowerCase().includes(needle)) &&
+        (!status || d.is_active === (status === 'ACTIVE')),
+    ) ?? [];
   return (
     <MastersShell>
       <div className="row" style={{ marginBottom: 12 }}>
@@ -135,7 +140,7 @@ export default function DistrictsPage() {
           </button>
         ) : null}
       </div>
-      {!canEdit ? <Notice tone="info">View only: your account can see the masters but not change them.</Notice> : null}
+      {!canEdit ? <ViewOnlyNotice /> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
       {done ? <Notice tone="ok">{done}</Notice> : null}
       {!rows && !error ? <div className="loading">Loading…</div> : null}
@@ -150,6 +155,17 @@ export default function DistrictsPage() {
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Search districts"
             />
+            <select
+              className="inp"
+              style={{ maxWidth: 180 }}
+              aria-label="Filter by status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as '' | 'ACTIVE' | 'INACTIVE')}
+            >
+              <option value="">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+            </select>
             <span className="muted">
               {shown.length} district{shown.length === 1 ? '' : 's'}
             </span>
@@ -164,14 +180,15 @@ export default function DistrictsPage() {
                   <th>State</th>
                   <th>Status</th>
                   <th>Used</th>
+                  <th>Talukas</th>
                   {canEdit ? <th>Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {shown.length === 0 ? (
                   <tr>
-                    <td colSpan={canEdit ? 7 : 6} className="center muted" style={{ padding: 28 }}>
-                      {needle ? 'No districts match.' : 'No districts yet.'}
+                    <td colSpan={canEdit ? 8 : 7} className="center muted" style={{ padding: 28 }}>
+                      {needle || status ? 'No districts match.' : 'No districts yet.'}
                     </td>
                   </tr>
                 ) : (
@@ -189,6 +206,7 @@ export default function DistrictsPage() {
                       <td>
                         <InUse value={d.in_use} />
                       </td>
+                      <td>{d.talukas ?? '—'}</td>
                       {canEdit ? (
                         <td>
                           <div className="row-actions">

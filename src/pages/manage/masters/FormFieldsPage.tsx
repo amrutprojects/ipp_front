@@ -2,32 +2,93 @@ import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../../api';
 import { Field, Notice } from '../../../components/ui';
+import { hasChoices } from '../../../form';
 import { useCanEdit } from '../../../session';
 import type { FieldType, MasterField } from '../../../types';
 import { MastersShell } from '../ManageLayout';
+import { checksText } from './fieldChecks';
 import MasterList from './MasterList';
-import { ConfirmDelete, FormDialog, messageOf, orderIssue, StatusSwitch } from './shared';
+import { ConfirmDelete, FormDialog, messageOf, orderIssue, StatusSwitch, ViewOnlyNotice } from './shared';
+import ValidationSection, { useValidation } from './ValidationSection';
 
-const TYPE_LABEL: Record<FieldType, string> = {
-  TEXT: 'Text',
-  TEXTAREA: 'Long text',
-  NUMBER: 'Number',
-  DATE: 'Date',
-  DROPDOWN: 'Dropdown',
-};
-const STEP_TITLE: Record<number, string> = { 1: 'Step 1 – Basic Details', 2: 'Step 2 – Main Form' };
-const CORE_WHY = 'Core field: the program needs it, so it is always asked. It can be renamed, reordered and given a help text.';
+const TYPES: [group: string, types: [FieldType, string][]][] = [
+  [
+    'Writing',
+    [
+      ['TEXT', 'Text'],
+      ['TEXTAREA', 'Long text'],
+      ['EMAIL', 'Email'],
+      ['MOBILE', 'Mobile number'],
+      ['URL', 'Web address (URL)'],
+    ],
+  ],
+  [
+    'Numbers and dates',
+    [
+      ['NUMBER', 'Number'],
+      ['DATE', 'Date'],
+      ['TIME', 'Time'],
+      ['MONTH', 'Month and year'],
+      ['YEAR', 'Year'],
+    ],
+  ],
+  [
+    'Choosing',
+    [
+      ['DROPDOWN', 'Dropdown (choose one)'],
+      ['RADIO', 'Radio buttons (choose one)'],
+      ['CHECKBOXES', 'Checkboxes (choose several)'],
+      ['YES_NO', 'Yes / No'],
+      ['CONSENT', 'Tick box (declaration)'],
+    ],
+  ],
+];
+const TYPE_LABEL = Object.fromEntries(TYPES.flatMap(([, types]) => types)) as Partial<Record<FieldType, string>>;
+/* In the table without what explains it in the list: "Dropdown". A type of a newer API is shown as it is named there. */
+const typeName = (type: FieldType) => TYPE_LABEL[type]?.replace(/ \((choose|declaration).*\)$/, '') ?? type;
+const FILE_HINT = 'For a file, add a document in Masters → Documents.';
 
-function LockIcon() {
+function TypeOptions({ current, types }: { current: FieldType; types?: FieldType[] }) {
+  const groups = TYPES.map(([group, all]) => [group, types ? all.filter(([k]) => types.includes(k)) : all] as const);
   return (
-    <svg className="lock" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-      <rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
-      <path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" strokeWidth="2" />
-    </svg>
+    <>
+      {TYPE_LABEL[current] ? null : <option value={current}>{current}</option>}
+      {groups
+        .filter(([, all]) => all.length)
+        .map(([group, all]) => (
+          <optgroup key={group} label={group}>
+            {all.map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+    </>
   );
 }
+const STEP_TITLE: Record<number, string> = { 1: 'Step 1 – Basic Details', 2: 'Step 2 – Main Form' };
+/* What the rest of the program does without an answer to the field. */
+const WITHOUT: Record<string, string> = {
+  first_name: "Not asked: the name of the student's account is used.",
+  last_name: "Not asked: the name of the student's account is used.",
+  mobile_number: "Not asked: the mobile number of the student's account is used.",
+  email: "It is the email ID of the student's account, which students cannot change here. Not asked: the account keeps it.",
+  aadhaar_number: 'Not asked, or left blank: a second form of the same person is not noticed.',
+  district_id: 'Not asked, or left blank: every technology is offered, and a batch is of the district of its centre.',
+  disability_status: 'Not asked: neither are the disability details.',
+  grading_type: 'Not asked: neither is the CGPA scale.',
+};
 
-/* Where a dropdown's choices are managed; null = its own choices (an own field), or none. */
+/* The types a field can be given. */
+const typesOf = (f: MasterField): FieldType[] | undefined => f.types ?? (f.custom ? undefined : [f.type]);
+function typeHint(f: MasterField): string {
+  const types = typesOf(f);
+  if (!types || types.length > 2) return `Answers already given are kept as they are. ${FILE_HINT}`;
+  return types.length === 1 ? 'The type of this field stays: its answers are used elsewhere too.' : 'One choice of its list.';
+}
+
+/* Where a dropdown's choices are managed; null = its own choices (FIELD:<key>), or none. */
 function choicesPage(f: MasterField): string | null {
   if (f.key === 'district_id') return '/manage/masters/districts';
   if (f.key === 'centre_id') return '/manage/centres';
@@ -51,7 +112,7 @@ const choicesIssue = (choices: ChoiceRow[]) => {
 };
 const choicesBody = (choices: ChoiceRow[]) => filledChoices(choices).map((c) => ({ name_en: c.name_en.trim(), name_mr: c.name_mr.trim() || undefined }));
 
-/* The choices of a new own dropdown, both names each (later they are edited under Choices). */
+/* The choices of a new dropdown, radio buttons or checkboxes, both names each (later they are edited under Choices). */
 function ChoiceRows({ choices, onChange, error }: { choices: ChoiceRow[]; onChange: (choices: ChoiceRow[]) => void; error?: string }) {
   const set = (i: number, key: keyof ChoiceRow, v: string) => onChange(choices.map((c, j) => (i === j ? { ...c, [key]: v } : c)));
   return (
@@ -101,7 +162,7 @@ function ChoiceRows({ choices, onChange, error }: { choices: ChoiceRow[]; onChan
   );
 }
 
-/* Add an own field: its step, names, type, whether it is required, and a dropdown's choices. */
+/* Add an own field: its step, names, type, choices, validation, and whether it is required. */
 function AddFieldDialog({ step: at, onClose, onSaved }: { step: number; onClose: () => void; onSaved: (message: string) => void }) {
   const [step, setStep] = useState(String(at));
   const [labelEn, setLabelEn] = useState('');
@@ -109,23 +170,28 @@ function AddFieldDialog({ step: at, onClose, onSaved }: { step: number; onClose:
   const [type, setType] = useState<FieldType>('TEXT');
   const [required, setRequired] = useState(false);
   const [choices, setChoices] = useState<ChoiceRow[]>(BLANK_CHOICES);
+  const validation = useValidation(null, type);
   const check = () => ({
     label_en: !labelEn.trim() ? 'English label is required' : '',
-    options: type === 'DROPDOWN' ? choicesIssue(choices) : '',
+    options: hasChoices(type) ? choicesIssue(choices) : '',
+    ...validation.check(),
   });
   const save = async () => {
-    await api('/manage/fields', {
-      method: 'POST',
-      realm: 'manage',
-      body: {
-        step: Number(step),
-        label_en: labelEn.trim(),
-        label_mr: labelMr.trim() || undefined,
-        type,
-        required,
-        options: type === 'DROPDOWN' ? choicesBody(choices) : undefined,
-      },
-    });
+    await validation.sending((v) =>
+      api('/manage/fields', {
+        method: 'POST',
+        realm: 'manage',
+        body: {
+          step: Number(step),
+          label_en: labelEn.trim(),
+          label_mr: labelMr.trim() || undefined,
+          type,
+          required,
+          options: hasChoices(type) ? choicesBody(choices) : undefined,
+          validation: v ?? undefined,
+        },
+      }),
+    );
     onSaved(`Field ${labelEn.trim()} added.`);
   };
   return (
@@ -144,16 +210,13 @@ function AddFieldDialog({ step: at, onClose, onSaved }: { step: number; onClose:
               <option value="2">{STEP_TITLE[2]}</option>
             </select>
           </Field>
-          <Field id="ff-type" label="Type" error={errors.type}>
+          <Field id="ff-type" label="Type" error={errors.type} hint={FILE_HINT}>
             <select id="ff-type" className="inp" value={type} onChange={(e) => setType(e.target.value as FieldType)}>
-              {Object.entries(TYPE_LABEL).map(([k, label]) => (
-                <option key={k} value={k}>
-                  {label}
-                </option>
-              ))}
+              <TypeOptions current={type} />
             </select>
           </Field>
-          {type === 'DROPDOWN' ? <ChoiceRows choices={choices} onChange={setChoices} error={errors.options} /> : null}
+          {hasChoices(type) ? <ChoiceRows choices={choices} onChange={setChoices} error={errors.options} /> : null}
+          <ValidationSection v={validation} type={type} label={labelEn} />
           <label className="check">
             <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} />
             <span>Required: the step cannot be completed without it</span>
@@ -164,7 +227,7 @@ function AddFieldDialog({ step: at, onClose, onSaved }: { step: number; onClose:
   );
 }
 
-/* Edit a field: names, help, order; required and on / off unless it is core; an own field's step and type too. */
+/* Edit a field: names, help, order, step, type, choices, validation, whether it is required and asked at all. */
 function EditFieldDialog({ field: f, onClose, onSaved }: { field: MasterField; onClose: () => void; onSaved: (message: string) => void }) {
   const [v, setV] = useState({
     label_en: f.label_en,
@@ -178,25 +241,30 @@ function EditFieldDialog({ field: f, onClose, onSaved }: { field: MasterField; o
     type: f.type,
   });
   const set = <K extends keyof typeof v>(k: K, value: (typeof v)[K]) => setV((old) => ({ ...old, [k]: value }));
-  /* Becoming a dropdown: it needs its choices at once. */
+  /* Given choices for the first time (a dropdown, radio buttons and checkboxes keep them between themselves): at once. */
   const [choices, setChoices] = useState<ChoiceRow[]>(BLANK_CHOICES);
-  const newDropdown = f.custom && v.type === 'DROPDOWN' && f.type !== 'DROPDOWN';
+  const newChoices = hasChoices(v.type) && !hasChoices(f.type);
+  const validation = useValidation(f.validation, v.type);
   const save = async () => {
     /* Only what changed. */
     const body: Record<string, unknown> = {};
     if (v.label_en.trim() !== f.label_en) body.label_en = v.label_en.trim();
     for (const k of ['label_mr', 'help_en', 'help_mr'] as const) if (v[k].trim() !== (f[k] ?? '')) body[k] = v[k].trim() || null;
     if (v.order.trim() && Number(v.order) !== f.order) body.order = Number(v.order);
-    if (!f.core) {
-      if (v.required !== f.required) body.required = v.required;
-      if (v.is_active !== f.is_active) body.is_active = v.is_active;
-    }
-    if (f.custom) {
-      if (Number(v.step) !== f.step) body.step = Number(v.step);
-      if (v.type !== f.type) body.type = v.type;
-      if (newDropdown) body.options = choicesBody(choices);
-    }
-    if (Object.keys(body).length) await api(`/manage/fields/${encodeURIComponent(f.id)}`, { method: 'PATCH', realm: 'manage', body });
+    if (v.required !== f.required) body.required = v.required;
+    if (v.is_active !== f.is_active) body.is_active = v.is_active;
+    if (Number(v.step) !== f.step) body.step = Number(v.step);
+    if (v.type !== f.type) body.type = v.type;
+    if (newChoices) body.options = choicesBody(choices);
+    if (Object.keys(body).length || validation.changed)
+      await validation.sending((sent) =>
+        api(`/manage/fields/${encodeURIComponent(f.id)}`, {
+          method: 'PATCH',
+          realm: 'manage',
+          /* null clears it. */
+          body: validation.changed ? { ...body, validation: sent } : body,
+        }),
+      );
     onSaved(`Field ${v.label_en.trim()} saved.`);
   };
   return (
@@ -206,18 +274,14 @@ function EditFieldDialog({ field: f, onClose, onSaved }: { field: MasterField; o
       check={() => ({
         label_en: !v.label_en.trim() ? 'English label is required' : '',
         order: orderIssue(v.order),
-        options: newDropdown ? choicesIssue(choices) : '',
+        options: newChoices ? choicesIssue(choices) : '',
+        ...validation.check(),
       })}
       save={save}
       onClose={onClose}
     >
       {(errors) => (
         <div className="grid one">
-          {f.core ? (
-            <p className="hint core-why">
-              <LockIcon /> {CORE_WHY}
-            </p>
-          ) : null}
           <Field id="fe-label-en" label="Label (English)" error={errors.label_en}>
             <input id="fe-label-en" className="inp" maxLength={150} value={v.label_en} onChange={(e) => set('label_en', e.target.value)} data-autofocus />
           </Field>
@@ -233,38 +297,34 @@ function EditFieldDialog({ field: f, onClose, onSaved }: { field: MasterField; o
           <Field id="fe-order" label="Order" required={false} error={errors.order} hint="Its place within the step.">
             <input id="fe-order" className="inp" inputMode="numeric" style={{ maxWidth: 140 }} value={v.order} onChange={(e) => set('order', e.target.value)} />
           </Field>
-          {f.custom ? (
-            <>
-              <Field id="fe-step" label="Step" error={errors.step}>
-                <select id="fe-step" className="inp" value={v.step} onChange={(e) => set('step', e.target.value)}>
-                  <option value="1">{STEP_TITLE[1]}</option>
-                  <option value="2">{STEP_TITLE[2]}</option>
-                </select>
-              </Field>
-              <Field id="fe-type" label="Type" error={errors.type} hint="Answers already given are kept as they are.">
-                <select id="fe-type" className="inp" value={v.type} onChange={(e) => set('type', e.target.value as FieldType)}>
-                  {Object.entries(TYPE_LABEL).map(([k, label]) => (
-                    <option key={k} value={k}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {newDropdown ? <ChoiceRows choices={choices} onChange={setChoices} error={errors.options} /> : null}
-            </>
-          ) : null}
-          {f.core ? null : (
-            <>
-              <label className="check">
-                <input type="checkbox" checked={v.required} onChange={(e) => set('required', e.target.checked)} />
-                <span>Required</span>
-              </label>
-              <label className="check">
-                <input type="checkbox" checked={v.is_active} onChange={(e) => set('is_active', e.target.checked)} />
-                <span>Active: asked in the form</span>
-              </label>
-            </>
-          )}
+          <Field id="fe-step" label="Step" error={errors.step}>
+            <select id="fe-step" className="inp" value={v.step} onChange={(e) => set('step', e.target.value)}>
+              <option value="1">{STEP_TITLE[1]}</option>
+              <option value="2">{STEP_TITLE[2]}</option>
+            </select>
+          </Field>
+          <Field id="fe-type" label="Type" error={errors.type} hint={typeHint(f)}>
+            <select
+              id="fe-type"
+              className="inp"
+              value={v.type}
+              onChange={(e) => set('type', e.target.value as FieldType)}
+              disabled={typesOf(f)?.length === 1}
+            >
+              <TypeOptions current={f.type} types={typesOf(f)} />
+            </select>
+          </Field>
+          {newChoices ? <ChoiceRows choices={choices} onChange={setChoices} error={errors.options} /> : null}
+          <ValidationSection v={validation} type={v.type} label={v.label_en} />
+          <label className="check">
+            <input type="checkbox" checked={v.required} onChange={(e) => set('required', e.target.checked)} />
+            <span>Required</span>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={v.is_active} onChange={(e) => set('is_active', e.target.checked)} />
+            <span>Active: asked in the form</span>
+          </label>
+          {WITHOUT[f.key] ? <p className="hint">{WITHOUT[f.key]}</p> : null}
         </div>
       )}
     </FormDialog>
@@ -281,7 +341,7 @@ export default function FormFieldsPage() {
   const [adding, setAdding] = useState<number | null>(null);
   const [editing, setEditing] = useState<MasterField | null>(null);
   const [deleting, setDeleting] = useState<MasterField | null>(null);
-  /* The own dropdown whose choices are open. */
+  /* The field whose own choices are open. */
   const [choicesOf, setChoicesOf] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -316,7 +376,7 @@ export default function FormFieldsPage() {
   };
 
   const choices = (f: MasterField) => {
-    if (f.type !== 'DROPDOWN') return null;
+    if (!hasChoices(f.type)) return null;
     const page = choicesPage(f);
     if (page)
       return (
@@ -324,7 +384,7 @@ export default function FormFieldsPage() {
           Choices
         </Link>
       );
-    return f.custom ? (
+    return f.custom || f.options_kind?.startsWith('FIELD:') ? (
       <button
         type="button"
         className="btn ghost sm"
@@ -343,9 +403,10 @@ export default function FormFieldsPage() {
         <h2 style={{ margin: 0 }}>Form fields</h2>
       </div>
       <p className="hint" style={{ marginTop: -4 }}>
-        Labels, help texts and own fields appear in every login. <LockIcon /> {CORE_WHY}
+        Labels, help texts and own fields appear in every login. Every field can be changed, made optional or switched off; a field
+        that is off is not asked, and answers already given stay stored.
       </p>
-      {!canEdit ? <Notice tone="info">View only: your account can see the masters but not change them.</Notice> : null}
+      {!canEdit ? <ViewOnlyNotice /> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
       {done ? <Notice tone="ok">{done}</Notice> : null}
       {!rows && !error ? <div className="loading">Loading…</div> : null}
@@ -393,24 +454,18 @@ export default function FormFieldsPage() {
                             <td>{f.order}</td>
                             <td>
                               <b>{f.label_en}</b>
-                              {f.core ? (
-                                <span className="core-mark" title={CORE_WHY}>
-                                  <LockIcon /> Core
-                                </span>
-                              ) : f.custom ? (
-                                <span className="badge own-mark">Own field</span>
-                              ) : null}
+                              {f.custom ? <span className="badge own-mark">Own field</span> : null}
                               {f.help_en ? <div className="hint">{f.help_en}</div> : null}
+                              {checksText(f.validation) ? <div className="hint">Checks: {checksText(f.validation)}</div> : null}
                             </td>
                             <td lang="mr">{f.label_mr || '—'}</td>
-                            <td>{TYPE_LABEL[f.type] ?? f.type}</td>
+                            <td>{typeName(f.type)}</td>
                             <td>{f.required ? 'Required' : 'Optional'}</td>
                             <td>
                               <StatusSwitch
                                 name={f.label_en}
                                 on={f.is_active}
                                 canEdit={canEdit}
-                                why={f.core ? CORE_WHY : undefined}
                                 onChange={(on) => setActive(f, on)}
                               />
                             </td>

@@ -5,7 +5,7 @@ import { useCanEdit } from '../../../session';
 import type { DistrictTechnologies, MasterOption } from '../../../types';
 import { MastersShell } from '../ManageLayout';
 import MasterList from './MasterList';
-import { messageOf } from './shared';
+import { messageOf, ViewOnlyNotice } from './shared';
 
 /*
  * District-wise technologies: the technologies a student of a district may choose. Nothing selected = every active
@@ -169,10 +169,12 @@ function DistrictTechnologiesSection({ version }: { version: number }) {
 
 /* Masters → Technologies: the technologies themselves, and which of them each district offers. */
 export default function TechnologiesPage() {
+  const canEdit = useCanEdit();
   const [version, setVersion] = useState(0);
   return (
     <MastersShell>
-      <MasterList kind="TECHNOLOGY" title="Technologies" onChanged={() => setVersion((v) => v + 1)} />
+      {!canEdit ? <ViewOnlyNotice /> : null}
+      <MasterList kind="TECHNOLOGY" title="Technologies" showCode onChanged={() => setVersion((v) => v + 1)} />
       <DistrictTechnologiesSection version={version} />
     </MastersShell>
   );

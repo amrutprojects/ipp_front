@@ -870,7 +870,7 @@ table.tbl {
   font-weight: 650;
   color: var(--brand-800);
 }
-/* Masters: their links, the dropdown lists beside the open one, the Active / Inactive switch, the core mark. */
+/* Masters: their links, the dropdown lists beside the open one, the Active / Inactive switch. */
 .masters-nav {
   display: flex;
   flex-wrap: wrap;
@@ -975,20 +975,8 @@ table.tbl {
 .switch.on .switch-track::after {
   transform: translateX(15px);
 }
-.lock {
-  vertical-align: -2px;
-}
 .own-mark {
   margin-left: 8px;
-}
-.core-mark {
-  margin-left: 8px;
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.core-why {
-  margin: 0;
 }
 .choice-row {
   display: grid;
@@ -996,6 +984,69 @@ table.tbl {
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
+}
+/* Form fields: the validation of a field (limits, checks, custom checks, try it). */
+.val {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.val h4,
+.val > p {
+  margin: 0;
+}
+.val h4 {
+  font-size: 16px;
+  color: var(--brand-800);
+}
+.val fieldset {
+  min-width: 0;
+}
+.val-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+}
+.val-check {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+textarea.val-source {
+  min-height: 0;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+}
+textarea.val-source.one {
+  height: 44px;
+  resize: none;
+  overflow-y: hidden;
+}
+.val-try {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.val-try .field {
+  flex: 1;
+}
+/* Level with the box beside it, under its label. */
+.val-try > .btn {
+  margin-top: 24px;
+}
+@media (max-width: 720px) {
+  .val-checks {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .approval-state {
   display: flex;

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api, type PageMeta } from '../../api';
-import { Notice } from '../../components/ui';
+import { Notice, useRemoteList } from '../../components/ui';
 import { useCanEdit } from '../../session';
-import type { Centre } from '../../types';
+import type { Centre, MasterDistrict } from '../../types';
 import CentreStatusDialog from './CentreStatusDialog';
 import { MastersShell } from './ManageLayout';
+import { ConfirmDelete, ViewOnlyNotice } from './masters/shared';
 
 const LIMIT = 25;
 
@@ -17,20 +18,27 @@ const LIMIT = 25;
 //   return names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3} more` : names.join(', ');
 // }
 
-/* Center Master list: search, status filter, pages; view / edit / activate / deactivate. No delete here. */
+/* What deleting a center means, asked before it is done (also on the center's own page). */
+export const CENTRE_DELETE_NOTE =
+  'It is no longer offered. A center that students or batches use cannot be deleted; deactivate it instead.';
+
+/* Center Master list: search, district and status filters, pages; view / edit / activate / deactivate / delete. */
 export default function CentresPage() {
   const location = useLocation();
   const canEdit = useCanEdit();
-  const [flash] = useState<string>(() => (location.state as { flash?: string } | null)?.flash ?? '');
+  const districts = useRemoteList<MasterDistrict>('/manage/districts', 'manage');
+  const [flash, setFlash] = useState<string>(() => (location.state as { flash?: string } | null)?.flash ?? '');
   const [rows, setRows] = useState<Centre[]>([]);
   const [meta, setMeta] = useState<PageMeta | null>(null);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
+  const [district, setDistrict] = useState('');
   const [status, setStatus] = useState<'' | 'true' | 'false'>('');
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<Centre | null>(null);
+  const [deleting, setDeleting] = useState<Centre | null>(null);
 
   /* Only the newest request's answer is shown. */
   const latest = useRef(0);
@@ -41,7 +49,7 @@ export default function CentresPage() {
     try {
       const res = await api<Centre[]>('/manage/centres', {
         realm: 'manage',
-        query: { page, limit: LIMIT, search: query || undefined, isActive: status || undefined },
+        query: { page, limit: LIMIT, search: query || undefined, districtId: district || undefined, isActive: status || undefined },
       });
       if (id !== latest.current) return;
       if (res.meta && res.meta.totalPages > 0 && res.meta.page > res.meta.totalPages) {
@@ -55,7 +63,7 @@ export default function CentresPage() {
     } finally {
       if (id === latest.current) setLoading(false);
     }
-  }, [page, query, status]);
+  }, [page, query, district, status]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -82,6 +90,7 @@ export default function CentresPage() {
           </Link>
         ) : null}
       </div>
+      {!canEdit ? <ViewOnlyNotice /> : null}
       {flash ? <Notice tone="ok">{flash}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
       <div className="toolbar">
@@ -93,6 +102,24 @@ export default function CentresPage() {
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search centers"
         />
+        <select
+          className="inp"
+          style={{ maxWidth: 220 }}
+          aria-label="Filter by district"
+          value={district}
+          onChange={(e) => {
+            setDistrict(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">All districts</option>
+          {districts.items.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+              {d.is_active ? '' : ' (inactive)'}
+            </option>
+          ))}
+        </select>
         <select
           className="inp"
           style={{ maxWidth: 200 }}
@@ -108,6 +135,7 @@ export default function CentresPage() {
           <option value="false">Inactive</option>
         </select>
         <span className="muted">{meta ? `${meta.total} center${meta.total === 1 ? '' : 's'}` : ''}</span>
+        {districts.status === 'error' ? <span className="err">Could not load the districts.</span> : null}
       </div>
       <div className="tbl-wrap">
         <table className="tbl">
@@ -117,6 +145,7 @@ export default function CentresPage() {
               <th>Name</th>
               <th>Code</th>
               <th>District</th>
+              <th>Taluka</th>
               {/* Technologies depend on the student's district.
               <th>Technologies</th>
               */}
@@ -127,7 +156,7 @@ export default function CentresPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="center muted" style={{ padding: 28 }}>
+                <td colSpan={7} className="center muted" style={{ padding: 28 }}>
                   {loading ? 'Loading…' : 'No centers match.'}
                 </td>
               </tr>
@@ -140,6 +169,7 @@ export default function CentresPage() {
                   </td>
                   <td className="mono nowrap">{c.code}</td>
                   <td>{c.districtName}</td>
+                  <td>{c.talukaName || '—'}</td>
                   {/* Technologies depend on the student's district.
                   <td className="fs13">{technologySummary(c)}</td>
                   */}
@@ -163,6 +193,17 @@ export default function CentresPage() {
                             aria-label={`${c.isActive ? 'Deactivate' : 'Activate'} ${c.name}`}
                           >
                             {c.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn danger sm"
+                            onClick={() => {
+                              setFlash('');
+                              setDeleting(c);
+                            }}
+                            aria-label={`Delete ${c.name}`}
+                          >
+                            Delete
                           </button>
                         </>
                       ) : null}
@@ -188,8 +229,8 @@ export default function CentresPage() {
         </div>
       ) : null}
       <p className="hint mt16">
-        Centers are shared with the Amrut admin panel (Center Master). Only active centers are offered to students in the registration
-        form. The technologies a student can choose depend on the student&apos;s district (Technologies).
+        Only active centers are offered to students in the registration form. The technologies a student can choose depend on the
+        student&apos;s district (Technologies).
       </p>
       {toggling && canEdit ? (
         <CentreStatusDialog
@@ -199,6 +240,19 @@ export default function CentresPage() {
             setToggling(null);
             void load();
           }}
+        />
+      ) : null}
+      {deleting && canEdit ? (
+        <ConfirmDelete
+          name={deleting.name}
+          note={CENTRE_DELETE_NOTE}
+          remove={async () => {
+            await api(`/manage/centres/${encodeURIComponent(deleting.id)}`, { method: 'DELETE', realm: 'manage' });
+            setFlash(`Center ${deleting.name} deleted.`);
+            setDeleting(null);
+            void load();
+          }}
+          onClose={() => setDeleting(null)}
         />
       ) : null}
     </MastersShell>

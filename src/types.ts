@@ -40,7 +40,75 @@ export interface DocumentType extends Ref {
   formats?: string[];
   max_mb?: number;
 }
-export type FieldType = 'TEXT' | 'TEXTAREA' | 'NUMBER' | 'DATE' | 'DROPDOWN';
+/*
+ * What a field asks for. Answers are text: TIME HH:MM, MONTH YYYY-MM, YEAR YYYY, a choice's value (DROPDOWN, RADIO), a JSON
+ * array of them in the list's order (CHECKBOXES; '' = none), Yes / No (YES_NO), Yes or '' (CONSENT). A type this portal does
+ * not know (from a newer API) is asked as TEXT.
+ */
+export type FieldType =
+  | 'TEXT'
+  | 'TEXTAREA'
+  | 'EMAIL'
+  | 'MOBILE'
+  | 'URL'
+  | 'NUMBER'
+  | 'DATE'
+  | 'TIME'
+  | 'MONTH'
+  | 'YEAR'
+  | 'DROPDOWN'
+  | 'RADIO'
+  | 'CHECKBOXES'
+  | 'YES_NO'
+  | 'CONSENT';
+/* The ready-made checks and limits of a field, in the order they are made. */
+export const RULE_TYPES = [
+  'letters',
+  'digits',
+  'letters_digits',
+  'no_spaces',
+  'uppercase',
+  'pin_code',
+  'pan',
+  'ifsc',
+  'min_length',
+  'max_length',
+  'whole_number',
+  'min_digits',
+  'max_digits',
+  'min_value',
+  'max_value',
+  'not_future',
+  'not_past',
+  'min_date',
+  'max_date',
+  'min_age',
+  'max_age',
+  'min_time',
+  'max_time',
+  'min_choices',
+  'max_choices',
+] as const;
+export type RuleType = (typeof RULE_TYPES)[number];
+export interface ValidationRule {
+  type: RuleType;
+  /* The limit of min_… and max_…: a number; a day (YYYY-MM-DD) of min_date and max_date, HH:MM of min_time and max_time. */
+  value?: number | string;
+}
+interface CheckMessages {
+  message_en: string;
+  message_mr: string | null;
+}
+/*
+ * A check of the Auditor's own. REGEX: the whole answer must match. JS: a function, run by the server only; its source is
+ * sent to the Form fields master, never to students.
+ */
+export type CustomCheck = CheckMessages & ({ kind: 'REGEX'; source: string; flags?: string } | { kind: 'JS'; source?: string });
+/* What the answer to a field must be, beyond its type or format: each rule type once, then the custom checks. */
+export interface FieldValidation {
+  rules: ValidationRule[];
+  custom: CustomCheck[];
+}
 /* A field of the form as the Form fields master defines it (GET /edp/options → fields: the active ones). */
 export interface FieldConfig {
   key: string;
@@ -49,14 +117,17 @@ export interface FieldConfig {
   label_mr: string | null;
   required: boolean;
   type: FieldType;
-  core: boolean;
   /* An own field, added in the Form fields master. */
   custom: boolean;
+  /* Checked and drawn by its type alone: an own field, or a known one given another type (absent from an older API: custom). */
+  by_type?: boolean;
   order: number;
-  /* The dropdown list its choices come from (FIELD:<key> for an own dropdown); null = none. */
+  /* The dropdown list its choices come from (FIELD:<key> for a field with choices of its own); null = none. */
   options_kind: string | null;
   help_en: string | null;
   help_mr: string | null;
+  /* null (or absent, from an older API) = none. */
+  validation?: FieldValidation | null;
 }
 /* A choice of a dropdown list (GET /edp/options → lists): the stored value and its names. */
 export interface ListItem {
@@ -283,6 +354,8 @@ export interface Applicant {
   district: string | null;
   category: string | null;
   centre: string | null;
+  /* Absent from an older API. */
+  centre_id?: string | null;
   /* Uploaded documents, and how many of them the Auditor verified. */
   documents: { uploaded: number; verified: number };
   /* Every uploaded document is verified. */
@@ -376,9 +449,26 @@ export interface Approval {
  * sends it to the Divisional Officer; from then on its students are fixed, and every stage approves it batch by batch.
  */
 export type BatchPlace = Exclude<StagePoint, 'BATCH'>;
+export type DeliveryMode = 'OFFLINE' | 'ONLINE' | 'BLENDED';
+export const DELIVERY_MODE_LABEL: Record<DeliveryMode, string> = {
+  OFFLINE: 'Offline (classroom)',
+  ONLINE: 'Online',
+  BLENDED: 'Blended',
+};
 export interface Batch {
   id: string;
   name: string;
+  /*
+   * An older API leaves these out: nothing is given then. code (IPP-B-0001) is made with the batch and never changes; the
+   * technology is information only, the students of a batch may have chosen different ones.
+   */
+  code?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  delivery_mode?: DeliveryMode | null;
+  technology?: TechnologyOption | null;
+  /* How many of its students chose another center than the batch's. */
+  other_centre?: number;
   centre: { id: string; name: string | null; code: string | null };
   district: { id: string; name: string } | null;
   students: number;
@@ -403,6 +493,9 @@ export interface BatchMember {
   district: string | null;
   category: string | null;
   centre: string | null;
+  /* Absent from an older API: the center and the technology the student chose. */
+  centre_id?: string | null;
+  technology?: string | null;
   documents_verified: boolean;
   final_verified: boolean;
   approval: Approval | null;
@@ -413,6 +506,8 @@ export interface BatchDetail extends Batch {
 /* GET / PUT /manage/settings/batch: the exact number of students of a new batch. */
 export interface BatchSettings extends SavedMeta {
   size: number;
+  /* Whether each student of a batch must have a district: the form requires it (absent from an older API: yes). */
+  district_required?: boolean;
 }
 /* The Auditor's verification of one uploaded document: who and when. */
 export interface DocumentCheck {
@@ -535,6 +630,39 @@ export interface MasterDocument {
 export interface MasterField extends FieldConfig {
   id: string;
   is_active: boolean;
+  /* The types it can be given (absent from an older API: any for an own field, else only its own). */
+  types?: FieldType[];
+}
+
+/* GET /manage/states: every state, active or not; districts = how many it has. */
+export interface MasterState {
+  id: string;
+  name: string;
+  code: string;
+  districts: number;
+  is_active: boolean;
+  in_use: boolean;
+}
+/* GET /manage/districts: every district, active or not; talukas = how many it has (absent from an older API). */
+export interface MasterDistrict {
+  id: string;
+  name: string;
+  code: string;
+  state_id?: string;
+  state: string;
+  talukas?: number;
+  is_active: boolean;
+  in_use: boolean;
+}
+/* GET /manage/talukas (paged). */
+export interface MasterTaluka {
+  id: string;
+  name: string;
+  code: string | null;
+  district_id: string;
+  district: string;
+  is_active: boolean;
+  in_use: boolean;
 }
 
 /* Center Master (the tracking panel's /manage/centres; the same shape as in the Kalash admin panel). */

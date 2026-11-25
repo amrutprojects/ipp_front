@@ -4,7 +4,7 @@ import { api, ApiError, downloadFile, openFile } from '../../api';
 import { kb } from '../../components/DocumentField';
 import { fmtDate, Notice } from '../../components/ui';
 import { fallbackView, viewRows } from '../../form';
-import type { Applicant, ApplicantDetail, DocumentCheckSaved, FollowUp, FormEdit, Stage } from '../../types';
+import { MAIN_FIELDS, type Applicant, type ApplicantDetail, type DocumentCheckSaved, type FollowUp, type FormEdit, type Stage } from '../../types';
 import ApprovalHistory from './ApprovalHistory';
 import ApprovalStageCell from './ApprovalStageCell';
 import ApproveDialog from './ApproveDialog';
@@ -12,14 +12,16 @@ import FollowUpDialog from './FollowUpDialog';
 import { ManageShell } from './ManageLayout';
 import { useCanEdit } from '../../session';
 
-/* The cards of the form: the address and the course apart from the rest of their step. */
+/* The cards of the form, whichever step a field is asked in. */
 const ADDRESS = new Set(['current_address', 'permanent_address', 'landmark', 'district_id', 'taluka', 'pin_code']);
 const COURSE = new Set(['region_id', 'centre_id', 'technology']);
+const QUALIFICATION = new Set<string>(MAIN_FIELDS);
 const CARDS = ['Basic Details', 'Address', 'Course & Center', 'Qualification', 'Additional details'] as const;
-function cardOf(r: { key: string; step: number; custom: boolean }): (typeof CARDS)[number] {
+function cardOf(r: { key: string; custom: boolean }): (typeof CARDS)[number] {
   if (r.custom) return 'Additional details';
-  if (r.step === 1) return ADDRESS.has(r.key) ? 'Address' : 'Basic Details';
-  return COURSE.has(r.key) ? 'Course & Center' : 'Qualification';
+  if (ADDRESS.has(r.key)) return 'Address';
+  if (COURSE.has(r.key)) return 'Course & Center';
+  return QUALIFICATION.has(r.key) ? 'Qualification' : 'Basic Details';
 }
 const STAGE_LABEL: Record<Stage, string> = {
   OTP_PENDING: 'OTP pending',

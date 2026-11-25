@@ -14,7 +14,7 @@ import {
 import { useCanEdit } from '../../session';
 import ApprovalStageCell from './ApprovalStageCell';
 import ApproveDialog, { type ApproveTarget } from './ApproveDialog';
-import { addPicks, pickBlocked, toPick, type BatchPick } from './batchPicks';
+import { addPicks, pickBlocked, pickedDistrict, toPick, type BatchPick } from './batchPicks';
 import CreateBatchDialog, { useBatchSize } from './CreateBatchDialog';
 import FollowUpDialog from './FollowUpDialog';
 import { ManageHeader, ManageNav } from './ManageLayout';
@@ -59,7 +59,8 @@ export default function ManagePage() {
   /* Students ticked for a new batch (approved, waiting for one): kept while the list is paged or filtered. */
   const [picks, setPicks] = useState<BatchPick[]>([]);
   const [batching, setBatching] = useState(false);
-  const { size: batchSize, failed: batchSizeFailed, reload: reloadBatchSize } = useBatchSize(canEdit);
+  const { size: batchSize, districtRequired, failed: batchSizeFailed, reload: reloadBatchSize } = useBatchSize(canEdit);
+  const batchRules = { size: batchSize, districtRequired };
   const [done, setDone] = useState('');
   const [search, setSearch] = useState('');
   const [text, setText] = useState(NO_TEXT);
@@ -129,10 +130,10 @@ export default function ManagePage() {
     });
   const togglePick = (r: Applicant) => setPicks((prev) => (prev.some((p) => p.id === r.id) ? prev.filter((p) => p.id !== r.id) : [...prev, toPick(r)]));
   /* Why a student who waits for a batch cannot be ticked now. */
-  const blocked = (r: Applicant) => (canEdit && r.can_batch ? pickBlocked(r, picks, batchSize) : null);
+  const blocked = (r: Applicant) => (canEdit && r.can_batch ? pickBlocked(r, picks, batchRules) : null);
   /* The checkbox in the heading: the forms to approve; on a page without any, the students waiting for a batch. */
   const headFor = approvable.length ? 'approve' : 'batch';
-  const withPage = addPicks(rows, picks, batchSize);
+  const withPage = addPicks(rows, picks, batchRules);
   const pickedHere = rows.some((r) => picked.has(r.id));
   const allTicked = headFor === 'approve' ? selectedRows.length === approvable.length : pickedHere && withPage.length === picks.length;
   const toggleAll = () => {
@@ -273,7 +274,7 @@ export default function ManagePage() {
                     ? '– ready: choose Create batch.'
                     : `– unselect ${picks.length - batchSize}.`}
             </span>
-            <span className="hint">A batch has one district: {picks[0]!.district}</span>
+            <span className="hint">A batch has one district: {pickedDistrict(picks) ?? 'the one of its centre'}</span>
             <span className="spacer" />
             <button type="button" className="link-btn" onClick={() => setPicks([])}>
               Clear selection

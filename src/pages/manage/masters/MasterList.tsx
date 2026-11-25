@@ -48,8 +48,8 @@ function OptionDialog({
       title={title}
       submit={row ? 'Save' : 'Add'}
       check={() => ({
-        name_en: !nameEn.trim() ? 'English name is required' : nameEn.trim().length > 200 ? 'English name must be at most 200 characters' : '',
-        name_mr: nameMr.trim().length > 200 ? 'Marathi name must be at most 200 characters' : '',
+        name_en: !nameEn.trim() ? 'English name is required' : nameEn.trim().length > 150 ? 'English name must be at most 150 characters' : '',
+        name_mr: nameMr.trim().length > 150 ? 'Marathi name must be at most 150 characters' : '',
         order: orderIssue(order),
       })}
       save={save}
@@ -58,10 +58,10 @@ function OptionDialog({
       {(errors) => (
         <div className="grid one">
           <Field id="m-name-en" label="Name (English)" error={errors.name_en}>
-            <input id="m-name-en" className="inp" maxLength={200} value={nameEn} onChange={(e) => setNameEn(e.target.value)} data-autofocus />
+            <input id="m-name-en" className="inp" maxLength={150} value={nameEn} onChange={(e) => setNameEn(e.target.value)} data-autofocus />
           </Field>
           <Field id="m-name-mr" label="Name (Marathi)" required={false} error={errors.name_mr} hint="Left blank: the English name is shown in Marathi too.">
-            <input id="m-name-mr" className="inp" maxLength={200} lang="mr" value={nameMr} onChange={(e) => setNameMr(e.target.value)} />
+            <input id="m-name-mr" className="inp" maxLength={150} lang="mr" value={nameMr} onChange={(e) => setNameMr(e.target.value)} />
           </Field>
           <Field id="m-order" label="Order" required={false} error={errors.order} hint="Its place in the list; left blank: at the end.">
             <input id="m-order" className="inp" inputMode="numeric" style={{ maxWidth: 140 }} value={order} onChange={(e) => setOrder(e.target.value)} />
@@ -81,12 +81,15 @@ export default function MasterList({
   title,
   canAdd = true,
   canDelete = true,
+  showCode = false,
   onChanged,
 }: {
   kind: string;
   title: string;
   canAdd?: boolean;
   canDelete?: boolean;
+  /* The codes too (the technologies': T01, T02, …). */
+  showCode?: boolean;
   onChanged?: () => void;
 }) {
   const canEdit = useCanEdit();
@@ -209,6 +212,7 @@ export default function MasterList({
           <thead>
             <tr>
               <th>Order</th>
+              {showCode ? <th>Code</th> : null}
               <th>Name (English)</th>
               <th>Name (Marathi)</th>
               <th>Status</th>
@@ -219,7 +223,7 @@ export default function MasterList({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={canEdit ? 6 : 5} className="center muted" style={{ padding: 28 }}>
+                <td colSpan={(canEdit ? 6 : 5) + (showCode ? 1 : 0)} className="center muted" style={{ padding: 28 }}>
                   {loading ? 'Loading…' : query || status ? 'Nothing matches.' : 'Nothing in the list yet.'}
                 </td>
               </tr>
@@ -227,6 +231,7 @@ export default function MasterList({
               rows.map((r) => (
                 <tr key={r.id}>
                   <td>{r.order}</td>
+                  {showCode ? <td className="mono nowrap">{r.code || '—'}</td> : null}
                   <td>
                     <b>{r.name_en}</b>
                     {r.is_system ? <div className="hint">Built in: can be renamed and switched off, not deleted.</div> : null}

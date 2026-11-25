@@ -9,13 +9,14 @@ import {
   BASIC_FIELDS,
   type FieldConfig,
   type FieldType,
+  type FieldValidation,
   type Form,
   type FormField,
   type ListItem,
   type Options,
   type ViewField,
 } from './types';
-import { FIELD_LABELS, isAsked, type FieldRule } from './validation';
+import { checkSaid, chosen, FIELD_LABELS, isAsked, type FieldRule } from './validation';
 
 export interface Choice {
   value: string;
@@ -30,7 +31,11 @@ export interface FieldDef {
   required: boolean;
   type: FieldType;
   custom: boolean;
+  /* Drawn and checked by its type alone: an own field, or a known one given another type than it comes with. */
+  plain: boolean;
   kind: string | null;
+  /* Its checks (Masters → Form fields). */
+  validation: FieldValidation | null;
 }
 
 /* Today's order of the fields, used when the API does not send them. */
@@ -102,6 +107,12 @@ const PARENT: Record<string, string> = {
   disability_certificate_number: 'disability_status',
   cgpa_scale: 'grading_type',
 };
+/* Own fields with choices of their own (FIELD:<key>). */
+const WITH_CHOICES = new Set<FieldType>(['DROPDOWN', 'RADIO', 'CHECKBOXES']);
+export const hasChoices = (type: FieldType) => WITH_CHOICES.has(type);
+/* "2024-06" → "06/2024". */
+export const monthText = (v: string) => (/^\d{4}-\d{2}$/.test(v) ? v.split('-').reverse().join('/') : v);
+
 const KNOWN = new Set<string>(DEFAULT_ORDER);
 /* A field this portal has its own control for; any other (an own field) is drawn by its type. */
 export const isKnown = (key: string) => KNOWN.has(key);
@@ -163,7 +174,6 @@ function defaultFields(o: Options): FieldConfig[] {
     label_mr: null,
     required: !OPTIONAL.has(key),
     type: KINDS[key] ? 'DROPDOWN' : (TYPES[key] ?? 'TEXT'),
-    core: false,
     custom: false,
     order: i,
     options_kind: KINDS[key] ?? null,
@@ -191,6 +201,8 @@ export interface FormModel {
   rules: (defs: FieldDef[], form: Form) => FieldRule[];
   /* A value as people read it (dropdown names, dates, the score with its scale); '' = empty. */
   text: (key: string, form: Form) => string;
+  /* A field's error in this language: the server sends the messages of a field's checks in English. */
+  said: (key: string, message: string) => string;
 }
 
 /* The technologies a student of this district may choose: the district's selection, else every active technology. */
@@ -216,18 +228,28 @@ export function buildModel(options: Options, lang: Lang): FormModel {
   const configs = options.fields?.length ? options.fields : defaultFields(options);
   const fields: FieldDef[] = [...configs]
     .sort((a, b) => a.step - b.step || a.order - b.order)
-    .map((f) => ({
-      key: f.key,
-      step: f.step === 1 ? 1 : 2,
-      label: pickName(lang, f.label_en, f.label_mr),
-      help: pickName(lang, f.help_en ?? '', f.help_mr),
-      required: f.required,
-      type: f.type,
-      custom: f.custom,
-      kind: f.options_kind ?? KINDS[f.key] ?? (f.type === 'DROPDOWN' && !isKnown(f.key) ? `FIELD:${f.key}` : null),
-    }));
+    .map((f) => {
+      const plain = !isKnown(f.key) || (f.by_type ?? f.custom);
+      return {
+        key: f.key,
+        step: f.step === 1 ? 1 : 2,
+        label: pickName(lang, f.label_en, f.label_mr),
+        help: pickName(lang, f.help_en ?? '', f.help_mr),
+        required: f.required,
+        type: f.type,
+        custom: f.custom,
+        plain,
+        /* Drawn by its type, it has choices by its type only: a type this portal does not know is a text box. */
+        kind: !plain ? (f.options_kind ?? KINDS[f.key] ?? null) : hasChoices(f.type) ? (f.options_kind ?? `FIELD:${f.key}`) : null,
+        validation: f.validation ?? null,
+      };
+    });
   const byKey = new Map(fields.map((f) => [f.key, f]));
 
+  const yesNo = (): Choice[] => [
+    { value: 'Yes', label: T('होय', 'Yes') },
+    { value: 'No', label: T('नाही', 'No') },
+  ];
   const asked = (key: string, form: Form) => (!PARENT[key] || byKey.has(PARENT[key]!)) && isAsked(key, form);
   const choices = (key: string, form: Form): Choice[] | null => {
     switch (key) {
@@ -238,10 +260,7 @@ export function buildModel(options: Options, lang: Lang): FormModel {
       case 'technology':
         return technologyChoices(options, lang, form.district_id ?? '');
       case 'disability_status':
-        return [
-          { value: 'Yes', label: T('होय', 'Yes') },
-          { value: 'No', label: T('नाही', 'No') },
-        ];
+        return yesNo();
       case 'cgpa_scale':
         return (
           listChoices('CGPA_SCALE', options, lang)?.map((c) => ({
@@ -250,8 +269,9 @@ export function buildModel(options: Options, lang: Lang): FormModel {
           })) ?? null
         );
       default: {
-        const kind = byKey.get(key)?.kind;
-        return kind ? listChoices(kind, options, lang) : null;
+        const f = byKey.get(key);
+        if (f?.type === 'YES_NO') return yesNo();
+        return f?.kind ? listChoices(f.kind, options, lang) : null;
       }
     }
   };
@@ -260,12 +280,15 @@ export function buildModel(options: Options, lang: Lang): FormModel {
     const v = form[key] ?? '';
     if (!v) return '';
     if (key === 'aadhaar_number') return groupedAadhaar(v);
-    if (key === 'score') return scoreText(v, form.grading_type ?? '', form.cgpa_scale ?? '');
+    if (key === 'score' && !byKey.get(key)?.plain) return scoreText(v, form.grading_type ?? '', form.cgpa_scale ?? '');
     if (key === 'cgpa_scale') return v;
     /* Also a technology the district no longer offers. */
     const list = key === 'technology' ? listChoices('TECHNOLOGY', options, lang) : choices(key, form);
+    const type = byKey.get(key)?.type;
+    if (type === 'CHECKBOXES') return chosen(v)?.map((x) => list?.find((c) => c.value === x)?.label ?? x).join(', ') ?? v;
     if (list) return list.find((c) => c.value === v)?.label ?? (['caste_id', 'district_id', 'region_id', 'centre_id', 'education_id'].includes(key) ? '—' : v);
-    return byKey.get(key)?.type === 'DATE' ? ddmmyyyy(v) : v;
+    if (type === 'CONSENT') return v === 'Yes' ? T('होय', 'Yes') : '';
+    return type === 'DATE' ? ddmmyyyy(v) : type === 'MONTH' ? monthText(v) : v;
   };
 
   return {
@@ -285,8 +308,14 @@ export function buildModel(options: Options, lang: Lang): FormModel {
         required: f.required,
         type: f.type,
         choices: choices(f.key, form)?.map((c) => c.value) ?? null,
+        plain: f.plain,
+        validation: f.validation,
       })),
     text,
+    said: (key, message) => {
+      const f = byKey.get(key);
+      return f ? checkSaid(message, f.validation, { en: configs.find((c) => c.key === key)!.label_en, shown: f.label }, T) : message;
+    },
   };
 }
 
@@ -331,16 +360,24 @@ export interface ViewRow {
   text: string;
   custom: boolean;
 }
-/* The lines to show, in order: dates as people write them, the score with its scale; what was not asked is left out. */
+/*
+ * The lines to show, in order: dates and months as people write them, the score with its scale, Yes / No and a ticked box in
+ * the chosen language (the names of several choices come joined from the API); what was not asked is left out.
+ */
 export function viewRows(view: ViewField[], lang: Lang): ViewRow[] {
+  const yesNo = (v: string) => (lang !== 'mr' ? v : v === 'Yes' ? 'होय' : v === 'No' ? 'नाही' : v);
+  const shown = (type: FieldType, raw: string) => {
+    if (type === 'DATE') return raw ? ddmmyyyy(raw) : '';
+    if (type === 'MONTH') return monthText(raw);
+    return type === 'YES_NO' || type === 'CONSENT' ? yesNo(raw) : raw;
+  };
   const valueOf = (key: string) => view.find((f) => f.key === key)?.value ?? '';
   const form = { disability_status: valueOf('disability_status'), grading_type: valueOf('grading_type') } as Form;
   return view
     .filter((f) => isAsked(f.key, form))
     .map((f) => {
       const raw = f.text ?? '';
-      const text =
-        f.type === 'DATE' ? (raw ? ddmmyyyy(raw) : '') : f.key === 'score' ? scoreText(raw, form.grading_type, valueOf('cgpa_scale') ?? '') : raw;
+      const text = f.key === 'score' ? scoreText(raw, form.grading_type, valueOf('cgpa_scale') ?? '') : shown(f.type, raw);
       return { key: f.key, step: f.step, label: pickName(lang, f.label_en, f.label_mr), text, custom: f.custom || !isKnown(f.key) };
     });
 }

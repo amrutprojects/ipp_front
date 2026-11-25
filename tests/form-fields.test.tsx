@@ -48,7 +48,6 @@ const FIELDS: FieldConfig[] = KEYS.map(([key, step, label_en, label_mr, over], i
   label_mr,
   required: true,
   type: 'TEXT',
-  core: false,
   custom: false,
   order: i,
   options_kind: null,
@@ -306,6 +305,136 @@ describe("The form from the masters (student's form)", () => {
     expect(screen.getByText('छंद आवश्यक आहे')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'English' }));
     expect(labels()[0]).toBe('Surname *');
+  });
+});
+
+describe('No field is fixed', () => {
+  const withFields = (change: (f: FieldConfig) => FieldConfig | null): Options => ({ ...OPTIONS, fields: FIELDS.flatMap((f) => change(f) ?? []) });
+  const only = (...keys: string[]) => withFields((f) => (keys.includes(f.key) ? f : null));
+  const saves = (calls: ReturnType<typeof mockApi>) => calls.filter((c) => c.method === 'PUT');
+
+  it('every field of a step can be off: the step says so and goes on', async () => {
+    const calls = mockApi(draft(), only('landmark'));
+    await renderFresh();
+    await userEvent.click(await screen.findByRole('button', { name: 'Save & Next →' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, save & next' }));
+    await screen.findByRole('heading', { name: 'Step 2 of 3 – Main Form' });
+    expect(screen.getByText('There is nothing to fill in here. Choose Save & Next to go on.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save & Next →' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, save & next' }));
+    await screen.findByRole('heading', { name: 'Upload Documents' });
+    expect(saves(calls).map((c) => c.body)).toEqual([
+      { complete: true, data: { landmark: 'Near the bus stand' } },
+      { complete: true, data: {} },
+    ]);
+  });
+
+  it('a centre and a technology that are off are left as they are', async () => {
+    const calls = mockApi(
+      draft({ form: { ...FORM, centre_id: 'gone', technology: 'GONE' } as Form }),
+      withFields((f) => (['centre_id', 'technology'].includes(f.key) ? null : f)),
+    );
+    await renderFresh();
+    await screen.findByRole('heading', { name: 'Step 1 of 3 – Basic Details' });
+    await new Promise((done) => setTimeout(done, 1500));
+    expect(saves(calls)).toEqual([]);
+    expect(screen.queryByText(/no longer available|no longer offered/)).not.toBeInTheDocument();
+  });
+
+  it('a known field given another type is drawn and checked by it, with choices of its own', async () => {
+    const options = withFields((f) =>
+      f.key === 'father_name'
+        ? { ...f, type: 'NUMBER', by_type: true }
+        : f.key === 'landmark'
+          ? { ...f, type: 'RADIO', by_type: true, options_kind: 'FIELD:landmark' }
+          : f.key === 'x_hobby'
+            ? null
+            : f,
+    );
+    options.lists = { ...options.lists, 'FIELD:landmark': [item('Temple', 'Temple', 'मंदिर'), item('Park', 'Park')] };
+    const calls = mockApi(draft({ form: { ...FORM, landmark: '' } as Form }), options);
+    await renderFresh();
+    await userEvent.click(await screen.findByRole('button', { name: 'Save & Next →' }));
+    expect(screen.getByText('Father Name must be a number')).toBeInTheDocument();
+    expect(screen.getByText('Landmark is required')).toBeInTheDocument();
+    /* In its place, not among the own fields. */
+    expect(labels().indexOf('Landmark *')).toBeLessThan(labels().indexOf('Additional details'));
+    const father = screen.getByLabelText(/^Father Name/);
+    await userEvent.clear(father);
+    await userEvent.type(father, '42');
+    await userEvent.click(screen.getByRole('radio', { name: 'Park' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save & Next →' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, save & next' }));
+    await screen.findByRole('heading', { name: 'Step 2 of 3 – Main Form' });
+    const saved = saves(calls).find((c) => (c.body as { complete: boolean }).complete)!;
+    expect(saved.body).toMatchObject({ data: { father_name: '42', landmark: 'Park' } });
+  });
+
+  it('a list as radio buttons: the same choices; the technology still follows the district', async () => {
+    const options = withFields((f) => (['religion', 'technology', 'centre_id'].includes(f.key) ? { ...f, type: 'RADIO', by_type: false, step: 1 } : f));
+    mockApi(draft(), options);
+    await renderFresh();
+    expect(await screen.findByRole('radio', { name: 'हिंदू' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Pune Centre (Pune)' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Data Analytics' })).toBeChecked();
+    await userEvent.selectOptions(screen.getByLabelText(/^District/), 'satara');
+    expect(screen.queryByRole('radio', { name: 'Data Analytics' })).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Web Design' })).not.toBeChecked();
+    expect(screen.getByText(/not offered in this district/)).toBeInTheDocument();
+  });
+
+  it('the checks of a known field come after its own format', async () => {
+    const options = withFields((f) =>
+      f.key === 'mother_name'
+        ? { ...f, validation: { rules: [{ type: 'min_length', value: 20 }], custom: [] } }
+        : f.key === 'aadhaar_number'
+          ? { ...f, validation: { rules: [], custom: [{ kind: 'REGEX', source: '4\\d{11}', message_en: 'Starts with 4', message_mr: null }] } }
+          : f,
+    );
+    mockApi(draft(), options);
+    await renderFresh();
+    const aadhaar = await screen.findByLabelText(/^Aadhaar Number/);
+    /* With spaces: its digits are checked. */
+    await userEvent.clear(aadhaar);
+    await userEvent.type(aadhaar, '4821 3579 2463');
+    await userEvent.click(screen.getByRole('button', { name: 'Save & Next →' }));
+    expect(screen.getByText('Mother Name must be at least 20 characters')).toBeInTheDocument();
+    expect(screen.queryByText('Starts with 4')).not.toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText(/^Mother Name/));
+    await userEvent.type(screen.getByLabelText(/^Mother Name/), 'M33na');
+    await userEvent.click(screen.getByRole('button', { name: 'Save & Next →' }));
+    expect(screen.getByText("Mother Name may contain only letters, spaces and . ' -")).toBeInTheDocument();
+  });
+
+  it('a field moved to step 2 is asked before the qualification, one moved to step 1 in its place there', async () => {
+    const options = withFields((f) => (f.key === 'first_name' ? { ...f, step: 2 } : f.key === 'qualification_board' ? { ...f, step: 1, order: 0 } : f));
+    mockApi(draft({ current_step: 2 }), options);
+    await renderFresh();
+    await screen.findByRole('heading', { name: 'Step 2 of 3 – Main Form' });
+    expect(labels().slice(0, 7)).toEqual([
+      'First Name *',
+      'Course District *',
+      'Center Name *',
+      'Technology *',
+      'Education Qualification *',
+      'Qualification details',
+      'Educational Status *',
+    ]);
+    await userEvent.click(screen.getByRole('button', { name: /Basic Details/ }));
+    expect(labels()).toContain('College Name *');
+    expect(labels()).not.toContain('First Name *');
+  });
+
+  it('an optional field may be left blank, also the Aadhaar number', async () => {
+    const calls = mockApi(
+      draft({ form: { ...FORM, aadhaar_number: '', caste_id: '', district_id: '' } as Form }),
+      withFields((f) => ({ ...f, required: false })),
+    );
+    await renderFresh();
+    await userEvent.click(await screen.findByRole('button', { name: 'Save & Next →' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, save & next' }));
+    await screen.findByRole('heading', { name: 'Step 2 of 3 – Main Form' });
+    expect(saves(calls).slice(-1)[0]!.body).toMatchObject({ complete: true, data: { aadhaar_number: '', caste_id: '', district_id: '' } });
   });
 });
 

@@ -7,7 +7,9 @@ import type { ApplicantDetail, ApprovalEvent, BatchDetail } from '../../types';
 import ApprovalHistory from './ApprovalHistory';
 import ApprovalStageCell from './ApprovalStageCell';
 import { batchPlaces } from './BatchesPage';
-import { useActiveCentres } from './CreateBatchDialog';
+import { batchDates, deliveryLabel, NO_PLAN, otherCentreText, planChanges, planOf, technologyLabel } from './batchPlan';
+import BatchPlanFields, { checkPlan, useTechnologies } from './BatchPlanFields';
+import { BATCH_FIELDS, useActiveCentres } from './CreateBatchDialog';
 import { ManageShell } from './ManageLayout';
 
 /* A student's whole approval history, loaded when it is opened (GET /manage/applicants/:id). */
@@ -29,16 +31,19 @@ function MemberHistory({ id }: { id: string }) {
 
 /*
  * One batch (/manage/batches/:id): where its students are now, each with the approval stage, a rejection's reason and the
- * whole history; an ADMIN account can change the name and the centre. The students of a batch are fixed.
+ * whole history; an ADMIN account can change the name, the centre, the dates, the delivery mode and the technology. The
+ * students of a batch, and its code, are fixed.
  */
 export default function BatchDetailPage() {
   const { id = '' } = useParams();
   const canEdit = useCanEdit();
   const { centres } = useActiveCentres();
+  const { technologies, failed: technologiesFailed } = useTechnologies(canEdit);
   const [batch, setBatch] = useState<BatchDetail | null>(null);
   const [loadError, setLoadError] = useState('');
   const [name, setName] = useState('');
   const [centreId, setCentreId] = useState('');
+  const [plan, setPlan] = useState(NO_PLAN);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
@@ -46,32 +51,37 @@ export default function BatchDetailPage() {
   /* The students whose history is open. */
   const [open, setOpen] = useState<Set<string>>(new Set());
 
+  /* The batch as the API has it, also in the form. */
+  const show = useCallback((b: BatchDetail) => {
+    setBatch(b);
+    setName(b.name);
+    setCentreId(b.centre.id);
+    setPlan(planOf(b));
+  }, []);
   const load = useCallback(async () => {
     try {
       const res = await api<BatchDetail>(`/manage/batches/${encodeURIComponent(id)}`, { realm: 'manage' });
-      setBatch(res.data);
-      setName(res.data.name);
-      setCentreId(res.data.centre.id);
+      show(res.data);
       setLoadError('');
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Could not load the batch');
     }
-  }, [id]);
+  }, [id, show]);
   useEffect(() => {
     void load();
   }, [load]);
 
-  const save = async (e: FormEvent) => {
+  const save = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!batch || busy) return;
-    const local: Record<string, string> = {};
+    const local = checkPlan(e.currentTarget, 'batch-edit', plan);
     if (name.trim().length < 2) local.name = 'Enter a batch name (at least 2 characters)';
     if (!centreId) local.centre_id = 'Choose a centre';
     setErrors(local);
     setError('');
     setDone('');
     if (Object.keys(local).length) return;
-    const body: Record<string, unknown> = {};
+    const body: Record<string, unknown> = planChanges(plan, planOf(batch));
     if (name.trim() !== batch.name) body.name = name.trim();
     if (centreId !== batch.centre.id) body.centre_id = centreId;
     if (!Object.keys(body).length) {
@@ -81,15 +91,13 @@ export default function BatchDetailPage() {
     setBusy(true);
     try {
       const res = await api<BatchDetail>(`/manage/batches/${encodeURIComponent(id)}`, { method: 'PATCH', realm: 'manage', body });
-      setBatch(res.data);
-      setName(res.data.name);
-      setCentreId(res.data.centre.id);
+      show(res.data);
       setDone('Batch details saved.');
     } catch (err) {
       if (err instanceof ApiError) {
         const fields = err.fields();
-        setErrors({ name: fields.name ?? '', centre_id: fields.centre_id ?? '' });
-        setError(err.status === 422 && (fields.name || fields.centre_id) ? 'Please correct the highlighted fields.' : err.message);
+        setErrors(fields);
+        setError(err.status === 422 && BATCH_FIELDS.some((k) => fields[k]) ? 'Please correct the highlighted fields.' : err.message);
       } else setError('Could not save the batch');
     } finally {
       setBusy(false);
@@ -119,6 +127,7 @@ export default function BatchDetailPage() {
       else next.add(key);
       return next;
     });
+  const otherCentre = otherCentreText(batch.other_centre, batch.students);
   /* The centre may be inactive now: it still shows, so the current value stays selectable. */
   const centreOptions = [
     ...(centres ?? []),
@@ -149,6 +158,11 @@ export default function BatchDetailPage() {
         {batch.created_by ? ` by ${batch.created_by}` : ''} · Last changed {fmtDate(batch.updated_at)}
         {batch.updated_by ? ` by ${batch.updated_by}` : ''}
       </p>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Code: <b className="mono">{batch.code || '—'}</b> · Dates: <b>{batchDates(batch)}</b> · Delivery mode: <b>{deliveryLabel(batch)}</b> ·
+        Technology: <b>{technologyLabel(batch)}</b>
+        {otherCentre ? ` · ${otherCentre}` : ''}
+      </p>
       {done ? <Notice tone="ok">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 
@@ -173,6 +187,16 @@ export default function BatchDetailPage() {
                   ))}
                 </select>
               </Field>
+              <BatchPlanFields
+                key={batch.updated_at}
+                id="batch-edit"
+                value={plan}
+                onChange={setPlan}
+                errors={errors}
+                technologies={technologies}
+                failed={technologiesFailed}
+                saved={batch}
+              />
             </div>
             <div className="actions">
               <button type="submit" className="btn" disabled={busy}>
@@ -215,6 +239,8 @@ export default function BatchDetailPage() {
                       <dd>{m.category ?? '—'}</dd>
                       <dt>Centre</dt>
                       <dd>{m.centre ?? '—'}</dd>
+                      <dt>Technology</dt>
+                      <dd>{m.technology ?? '—'}</dd>
                       <dt>Documents</dt>
                       <dd>
                         <span className={m.documents_verified ? 'badge active' : 'badge'}>{m.documents_verified ? 'Verified' : 'Not verified'}</span>

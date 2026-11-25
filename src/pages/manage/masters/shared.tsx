@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError } from '../../../api';
 import { Modal, Notice } from '../../../components/ui';
 
@@ -8,27 +8,25 @@ export const messageOf = (e: unknown, fallback: string) => (e instanceof Error &
 /* An order typed in a form: '' = left to the API; NaN-safe ("" or a whole number ≥ 0). */
 export const orderIssue = (v: string) => (v.trim() && !/^\d{1,5}$/.test(v.trim()) ? 'Order must be a whole number' : '');
 
+/* On a master's page, for a view-only account. */
+export function ViewOnlyNotice() {
+  return <Notice tone="info">View only: your account can see the masters but not change them.</Notice>;
+}
+
 /* Active / Inactive as a switch; a view-only account (or a row that cannot be switched, `why`) sees the state. */
 export function StatusSwitch({
   name,
   on,
   canEdit,
-  why,
   onChange,
 }: {
   name: string;
   on: boolean;
   canEdit: boolean;
-  why?: string;
   onChange: (on: boolean) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
-  if (!canEdit || why)
-    return (
-      <span className={`badge ${on ? 'active' : 'inactive'}`} title={why}>
-        {on ? 'Active' : 'Inactive'}
-      </span>
-    );
+  if (!canEdit) return <span className={`badge ${on ? 'active' : 'inactive'}`}>{on ? 'Active' : 'Inactive'}</span>;
   return (
     <button
       type="button"
@@ -75,6 +73,11 @@ export function FormDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState('');
   const [busy, setBusy] = useState(false);
+  /* In a long dialog: what is wrong is brought into view. */
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (failure || Object.values(errors).some(Boolean)) box.current?.querySelector('.notice.error, .err')?.scrollIntoView?.({ block: 'nearest' });
+  }, [errors, failure]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -100,18 +103,20 @@ export function FormDialog({
 
   return (
     <Modal title={title} onClose={() => !busy && onClose()}>
-      {failure ? <Notice tone="error">{failure}</Notice> : null}
-      <form onSubmit={(e) => void onSubmit(e)} noValidate>
-        {children(errors)}
-        <div className="actions">
-          <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
-            Cancel
-          </button>
-          <button type="submit" className="btn" disabled={busy}>
-            {busy ? 'Saving…' : submit}
-          </button>
-        </div>
-      </form>
+      <div ref={box}>
+        {failure ? <Notice tone="error">{failure}</Notice> : null}
+        <form onSubmit={(e) => void onSubmit(e)} noValidate>
+          {children(errors)}
+          <div className="actions">
+            <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" className="btn" disabled={busy}>
+              {busy ? 'Saving…' : submit}
+            </button>
+          </div>
+        </form>
+      </div>
     </Modal>
   );
 }

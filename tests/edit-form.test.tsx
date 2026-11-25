@@ -13,7 +13,6 @@ const config = (key: string, step: number, label_en: string, over: Partial<Field
   label_mr: `${label_en} (mr)`,
   required: true,
   type: 'TEXT',
-  core: false,
   custom: false,
   order: 0,
   options_kind: null,
@@ -22,17 +21,17 @@ const config = (key: string, step: number, label_en: string, over: Partial<Field
   ...over,
 });
 const FIELDS: FieldConfig[] = [
-  config('first_name', 1, 'First Name', { core: true }),
-  config('father_name', 1, 'Father Name', { core: true, order: 1 }),
-  config('email', 1, 'Email', { core: true, order: 2 }),
-  config('aadhaar_number', 1, 'Aadhaar Number', { core: true, order: 3 }),
-  config('district_id', 1, 'District', { core: true, type: 'DROPDOWN', order: 4 }),
-  config('religion', 1, 'Religion', { core: true, type: 'DROPDOWN', options_kind: 'RELIGION', order: 5 }),
+  config('first_name', 1, 'First Name'),
+  config('father_name', 1, 'Father Name', { order: 1 }),
+  config('email', 1, 'Email', { order: 2 }),
+  config('aadhaar_number', 1, 'Aadhaar Number', { order: 3 }),
+  config('district_id', 1, 'District', { type: 'DROPDOWN', order: 4 }),
+  config('religion', 1, 'Religion', { type: 'DROPDOWN', options_kind: 'RELIGION', order: 5 }),
   config('landmark', 1, 'Landmark', { required: false, order: 6 }),
   config('disability_status', 1, 'Person with Disability', { order: 7 }),
   config('disability_type', 1, 'Type of Disability', { order: 8 }),
   config('x_hobby', 1, 'Hobby', { custom: true, required: false, order: 9 }),
-  config('technology', 2, 'Technology', { core: true, type: 'DROPDOWN', options_kind: 'TECHNOLOGY' }),
+  config('technology', 2, 'Technology', { type: 'DROPDOWN', options_kind: 'TECHNOLOGY' }),
   config('qualification_board', 2, 'College Name', { order: 1 }),
 ];
 const item = (value: string, name_en: string) => ({ value, name_en, name_mr: null });

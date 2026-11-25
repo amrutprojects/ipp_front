@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError, openFile } from '../../api';
 import { DocumentField } from '../../components/DocumentField';
-import { StepFields, useFormRules } from '../../components/FormFields';
+import { StepFields, useFocusWrong, useFormRules } from '../../components/FormFields';
 import { Notice, useOptions } from '../../components/ui';
 import { buildModel } from '../../form';
 import type { ApplicantDetail, Form, Options } from '../../types';
@@ -98,6 +98,7 @@ function EditForm({
     if (keys.some((k) => errors[k])) setErrors((e) => ({ ...e, ...Object.fromEntries(keys.map((k) => [k, ''])) }));
   };
   const rules = useFormRules({ form, model, set, clearErrors });
+  const focusWrong = useFocusWrong();
   const locked = Object.fromEntries([...detail.locked_fields, 'email'].map((k) => [k, LOCKED_WHY[k] ?? 'This field cannot be changed.']));
   const current = Object.fromEntries((detail.view_fields ?? []).map((f) => [f.key, { value: f.value ?? '', text: f.text ?? '' }]));
 
@@ -120,6 +121,7 @@ function EditForm({
     setErrors(local);
     if (Object.keys(local).length) {
       setFailure(`Please correct the highlighted fields: ${Object.keys(local).map(model.label).join(', ')}.`);
+      focusWrong(local, true);
       return toTop();
     }
     setBusy(true);
@@ -135,6 +137,7 @@ function EditForm({
       if (err instanceof ApiError) {
         const fields = err.fields();
         setErrors(fields);
+        focusWrong(fields, true);
         setFailure(
           err.status === 422 && Object.keys(fields).length
             ? `Please correct the highlighted fields: ${Object.keys(fields).map(model.label).join(', ')}.`

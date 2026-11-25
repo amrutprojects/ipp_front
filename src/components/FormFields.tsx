@@ -1,7 +1,7 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { isKnown, type Choice, type FieldDef, type FormModel } from '../form';
-import type { Form } from '../types';
-import { isCgpa, localToday, OWN_TEXTAREA_MAX, OWN_TEXT_MAX } from '../validation';
+import { MAIN_FIELDS, type Form, type RuleType } from '../types';
+import { chosen, chosenText, isCgpa, localToday, OWN_TEXTAREA_MAX, OWN_TEXT_MAX, YEAR_MAX, YEAR_MIN } from '../validation';
 import { Field, Notice } from './ui';
 
 /*
@@ -77,8 +77,29 @@ export function useFormRules({
   return { change, sameAddress, onSameAddress, warning, setWarning };
 }
 
-/* Step 2's known fields: the course, then the qualification; step 1 is one group. Own (unknown) fields come last. */
+/*
+ * Moves the focus to the first wrong field as shown (the first box of a group) once it is drawn. `still` = without scrolling
+ * to it: the page shows what is said on top.
+ */
+export function useFocusWrong() {
+  const [wrong, setWrong] = useState<{ keys: string[]; still: boolean } | null>(null);
+  useEffect(() => {
+    const boxes = (wrong?.keys ?? []).map((k) => document.getElementById(`f-${k}`)).filter((el) => el !== null);
+    boxes.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    boxes[0]?.focus({ preventScroll: wrong?.still });
+  }, [wrong]);
+  return (errors: Record<string, string>, still = false) => {
+    const keys = Object.keys(errors).filter((k) => errors[k]);
+    if (keys.length) setWrong({ keys, still });
+  };
+}
+
+/*
+ * Step 2's known fields: the course (and what was moved there from step 1), then the qualification; step 1 is one group. Own
+ * (unknown) fields come last.
+ */
 const COURSE = ['region_id', 'centre_id', 'technology', 'education_id'];
+const QUALIFICATION: readonly string[] = MAIN_FIELDS.filter((k) => !COURSE.includes(k));
 function groupsOf(step: number, defs: FieldDef[], T: FormModel['T']): { title: string; fields: FieldDef[] }[] {
   const known = defs.filter((f) => isKnown(f.key) && !f.custom);
   const own = defs.filter((f) => !known.includes(f));
@@ -86,8 +107,8 @@ function groupsOf(step: number, defs: FieldDef[], T: FormModel['T']): { title: s
     ...(step === 1
       ? [{ title: '', fields: known }]
       : [
-          { title: '', fields: known.filter((f) => COURSE.includes(f.key)) },
-          { title: T('पात्रतेचा तपशील', 'Qualification details'), fields: known.filter((f) => !COURSE.includes(f.key)) },
+          { title: '', fields: known.filter((f) => !QUALIFICATION.includes(f.key)) },
+          { title: T('पात्रतेचा तपशील', 'Qualification details'), fields: known.filter((f) => QUALIFICATION.includes(f.key)) },
         ]),
     { title: T('अतिरिक्त तपशील', 'Additional details'), fields: own },
   ].filter((g) => g.fields.length);
@@ -120,6 +141,7 @@ export function StepFields({
   const today = localToday();
   const { change } = rules;
 
+  const errorOf = (f: FieldDef) => (errors[f.key] ? model.said(f.key, errors[f.key]!) : undefined);
   const common = (f: FieldDef) => ({
     id: `f-${f.key}`,
     className: 'inp',
@@ -162,7 +184,7 @@ export function StepFields({
     <Field
       id={`f-${f.key}`}
       label={opts.label ?? f.label}
-      error={errors[f.key]}
+      error={errorOf(f)}
       wide={opts.wide}
       hint={locked[f.key] || f.help || opts.hint}
       required={opts.required ?? f.required}
@@ -170,50 +192,92 @@ export function StepFields({
       {control}
     </Field>
   );
-  /* Yes / No (or any short choice) as radio buttons: a fieldset named by its legend, arrow keys move between them. */
-  const radios = (f: FieldDef) => {
-    const hint = locked[f.key] || f.help;
-    const described = errors[f.key] ? `f-${f.key}-err` : hint ? `f-${f.key}-hint` : undefined;
-    return (
-      <fieldset className="field radios" aria-describedby={described}>
-        <legend className="label">
-          {f.label} {f.required ? <span className="req">*</span> : null}
-        </legend>
-        <div className="radio-row">
-          {choicesOf(f).map((o, i) => (
-            <label key={o.value} className="radio">
-              <input
-                type="radio"
-                id={i === 0 ? `f-${f.key}` : `f-${f.key}-${i}`}
-                name={`f-${f.key}`}
-                value={o.value}
-                checked={form[f.key] === o.value}
-                onChange={() => change(f.key, o.value)}
-                disabled={!!locked[f.key]}
-                aria-invalid={!!errors[f.key] || undefined}
-              />
-              {o.label}
-            </label>
-          ))}
-        </div>
-        {errors[f.key] ? (
-          <span className="err" role="alert" id={`f-${f.key}-err`}>
-            {errors[f.key]}
-          </span>
-        ) : hint ? (
-          <span className="hint" id={`f-${f.key}-hint`}>
-            {hint}
-          </span>
-        ) : null}
-      </fieldset>
-    );
+  /* What describes a field of boxes: its error, else its hint. */
+  const describedBy = (f: FieldDef) => (errors[f.key] ? `f-${f.key}-err` : locked[f.key] || f.help ? `f-${f.key}-hint` : undefined);
+  const note = (f: FieldDef) =>
+    errors[f.key] ? (
+      <span className="err" role="alert" id={`f-${f.key}-err`}>
+        {errorOf(f)}
+      </span>
+    ) : locked[f.key] || f.help ? (
+      <span className="hint" id={`f-${f.key}-hint`}>
+        {locked[f.key] || f.help}
+      </span>
+    ) : null;
+  /* A fieldset of boxes, named by its legend; the first box is the one the focus goes to. */
+  const boxes = (f: FieldDef, items: Choice[], box: (o: Choice) => { type: string; checked: boolean; onChange: () => void }, wide = false) => (
+    <fieldset className={wide ? 'field radios wide' : 'field radios'} aria-describedby={describedBy(f)}>
+      <legend className="label">
+        {f.label} {f.required ? <span className="req">*</span> : null}
+      </legend>
+      <div className="radio-row">
+        {items.map((o, i) => (
+          <label key={o.value} className="radio">
+            <input
+              {...box(o)}
+              id={i === 0 ? `f-${f.key}` : `f-${f.key}-${i}`}
+              name={`f-${f.key}`}
+              value={o.value}
+              disabled={!!locked[f.key]}
+              aria-invalid={!!errors[f.key] || undefined}
+            />
+            {o.label}
+          </label>
+        ))}
+      </div>
+      {note(f)}
+    </fieldset>
+  );
+  /* Yes / No (or any short choice) as radio buttons: arrow keys move between them. */
+  const radios = (f: FieldDef) =>
+    boxes(f, choicesOf(f), (o) => ({ type: 'radio', checked: form[f.key] === o.value, onChange: () => change(f.key, o.value) }));
+  /* Several choices, kept in the list's order; one that is no longer offered stays shown until it is unticked. */
+  const checkboxes = (f: FieldDef) => {
+    const list = model.choices(f.key, form) ?? [];
+    const picked = chosen(form[f.key] ?? '') ?? [];
+    const gone = picked.filter((v) => !list.some((c) => c.value === v));
+    const items = [...list, ...gone.map((v) => ({ value: v, label: T(`${v} (आता उपलब्ध नाही)`, `${v} (no longer offered)`) }))];
+    const toggle = (value: string) =>
+      change(f.key, chosenText(items.map((c) => c.value).filter((v) => (v === value ? !picked.includes(v) : picked.includes(v)))));
+    return boxes(f, items, (o) => ({ type: 'checkbox', checked: picked.includes(o.value), onChange: () => toggle(o.value) }), true);
   };
+  /* A declaration: one box, its label beside it. */
+  const consent = (f: FieldDef) => (
+    <div className="field wide">
+      <label className="check-row">
+        <input
+          type="checkbox"
+          id={`f-${f.key}`}
+          checked={form[f.key] === 'Yes'}
+          onChange={(e) => change(f.key, e.target.checked ? 'Yes' : '')}
+          disabled={!!locked[f.key]}
+          aria-invalid={!!errors[f.key] || undefined}
+          aria-required={f.required || undefined}
+          aria-describedby={describedBy(f)}
+        />
+        <span>
+          {f.label} {f.required ? <span className="req">*</span> : null}
+        </span>
+      </label>
+      {note(f)}
+    </div>
+  );
   /* The student's own details are offered by the browser; the Auditor types somebody else's. */
   const auto = (name: string) => ({ autoComplete: editing ? 'off' : name });
   const digits = (n: number) => (v: string) => v.replace(/\D/g, '').slice(0, n);
+  const limitIn = (f: FieldDef, type: RuleType) => {
+    const value = f.validation?.rules?.find((r) => r.type === type)?.value;
+    return typeof value === 'number' ? value : undefined;
+  };
+  /* The longest answer of a field drawn by its type: its own limit (which is also checked), else what the API takes. */
+  const longest = (f: FieldDef, most: number) => {
+    const limit = limitIn(f, 'max_length');
+    return limit && limit > 0 ? Math.min(limit, most) : most;
+  };
 
+  const optional = (f: FieldDef, mr: string, en: string) => (f.required ? T(mr, en) : T(`ऐच्छिक. ${mr}`, `Optional. ${en}`));
   const control = (f: FieldDef): ReactNode => {
-    switch (f.key) {
+    switch (f.plain ? '' : f.key) {
       case 'first_name':
         return field(f, input(f, 'text', { maxLength: 100, ...auto('given-name') }));
       case 'last_name':
@@ -287,11 +351,11 @@ export function StepFields({
         return field(f, input(f, 'tel', { maxLength: 15, ...auto('tel') }));
       case 'alternate_mobile_number':
         return field(f, input(f, 'tel', { maxLength: 15 }), {
-          hint: T('ऐच्छिक. आपल्याशी संपर्कासाठी दुसरा क्रमांक.', 'Optional. A different number we can reach you on.'),
+          hint: optional(f, 'आपल्याशी संपर्कासाठी दुसरा क्रमांक.', 'A different number we can reach you on.'),
         });
       case 'alternate_email':
         return field(f, input(f, 'email', { maxLength: 254 }), {
-          hint: T('ऐच्छिक. खात्याच्या ईमेल आयडीपेक्षा वेगळा.', 'Optional. Different from the email ID of your account.'),
+          hint: optional(f, 'खात्याच्या ईमेल आयडीपेक्षा वेगळा.', 'Different from the email ID of your account.'),
         });
       case 'disability_status':
         return radios(f);
@@ -308,7 +372,9 @@ export function StepFields({
         const none = !choicesOf(f).length;
         return (
           <>
-            {field(f, select(f, none ? T('या जिल्ह्यात तंत्रज्ञान उपलब्ध नाही', 'No technologies in this district') : undefined))}
+            {f.type === 'RADIO'
+              ? radios(f)
+              : field(f, select(f, none ? T('या जिल्ह्यात तंत्रज्ञान उपलब्ध नाही', 'No technologies in this district') : undefined))}
             {rules.warning ? (
               <div className="wide">
                 <Notice tone="warn">{rules.warning}</Notice>
@@ -359,18 +425,41 @@ export function StepFields({
         );
       }
       default:
-        /* The other dropdowns, and the own fields by their type. */
+        /* The other lists, and the fields drawn by their type (one this portal does not know: a text box). */
         switch (f.type) {
           case 'DROPDOWN':
             return field(f, select(f));
+          case 'RADIO':
+          case 'YES_NO':
+            return radios(f);
+          case 'CHECKBOXES':
+            return checkboxes(f);
+          case 'CONSENT':
+            return consent(f);
+          case 'EMAIL':
+            return field(f, input(f, 'email', { maxLength: 254 }));
+          case 'MOBILE':
+            return field(f, input(f, 'tel', { maxLength: 15 }));
+          case 'URL':
+            return field(f, input(f, 'url', { maxLength: OWN_TEXTAREA_MAX, placeholder: 'https://' }));
+          case 'TIME':
+            return field(f, input(f, 'time'));
+          case 'MONTH':
+            /* A browser without a month picker shows a text box. */
+            return field(f, input(f, 'month', { placeholder: 'YYYY-MM' }));
+          case 'YEAR':
+            return field(
+              f,
+              input(f, 'number', { min: limitIn(f, 'min_value') ?? YEAR_MIN, max: limitIn(f, 'max_value') ?? YEAR_MAX, step: 1, inputMode: 'numeric' }),
+            );
           case 'TEXTAREA':
-            return field(f, textarea(f, OWN_TEXTAREA_MAX), { wide: true });
+            return field(f, textarea(f, longest(f, OWN_TEXTAREA_MAX)), { wide: true });
           case 'NUMBER':
             return field(f, input(f, 'text', { inputMode: 'decimal', maxLength: 20 }));
           case 'DATE':
             return field(f, input(f, 'date'));
           default:
-            return field(f, input(f, 'text', { maxLength: OWN_TEXT_MAX }));
+            return field(f, input(f, 'text', { maxLength: longest(f, OWN_TEXT_MAX) }));
         }
     }
   };

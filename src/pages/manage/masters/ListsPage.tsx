@@ -6,7 +6,7 @@ import { useCanEdit } from '../../../session';
 import type { MasterKind } from '../../../types';
 import { MastersShell } from '../ManageLayout';
 import MasterList from './MasterList';
-import { messageOf } from './shared';
+import { messageOf, ViewOnlyNotice } from './shared';
 
 /*
  * Masters → Dropdown lists (/manage/masters/lists/:kind): every list the form's dropdowns offer, one at a time. The
@@ -34,7 +34,7 @@ export default function ListsPage() {
   const current = kinds?.find((k) => k.kind === kind) ?? (kind ? undefined : kinds?.[0]);
   return (
     <MastersShell>
-      {!canEdit ? <Notice tone="info">View only: your account can see the masters but not change them.</Notice> : null}
+      {!canEdit ? <ViewOnlyNotice /> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
       {!kinds && !error ? <div className="loading">Loading…</div> : null}
       {kinds ? (

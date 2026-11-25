@@ -59,7 +59,9 @@ export function MastersNav() {
       <NavLink to="/manage/masters/technologies">Technologies</NavLink>
       <NavLink to="/manage/masters/documents">Documents</NavLink>
       <NavLink to="/manage/masters/fields">Form fields</NavLink>
+      <NavLink to="/manage/masters/states">States</NavLink>
       <NavLink to="/manage/masters/districts">Districts</NavLink>
+      <NavLink to="/manage/masters/talukas">Talukas</NavLink>
       <NavLink to="/manage/centres">Center Master</NavLink>
     </nav>
   );

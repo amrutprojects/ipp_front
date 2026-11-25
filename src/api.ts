@@ -99,6 +99,16 @@ export async function api<T>(path: string, opts: Options = {}): Promise<{ data: 
   return { data: json?.data as T, meta: json?.meta, message: json?.message ?? '' };
 }
 
+/* Every row of a paged list, 100 at a time until meta.totalPages. */
+export async function apiAll<T>(path: string, opts: Pick<Options, 'realm' | 'query'> = {}): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 1; ; page++) {
+    const res = await api<T[]>(path, { ...opts, query: { page, limit: 100, ...opts.query } });
+    all.push(...(res.data ?? []));
+    if (!res.data?.length || page >= (res.meta?.totalPages ?? 1)) return all;
+  }
+}
+
 /* An authenticated file (the student's own document), opened in a new tab. */
 export async function openFile(path: string, realm: Realm): Promise<void> {
   const tab = window.open('', '_blank');

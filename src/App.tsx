@@ -15,6 +15,8 @@ import DistrictsPage from './pages/manage/masters/DistrictsPage';
 import DocumentsMasterPage from './pages/manage/masters/DocumentsMasterPage';
 import FormFieldsPage from './pages/manage/masters/FormFieldsPage';
 import ListsPage from './pages/manage/masters/ListsPage';
+import StatesPage from './pages/manage/masters/StatesPage';
+import TalukasPage from './pages/manage/masters/TalukasPage';
 import TechnologiesPage from './pages/manage/masters/TechnologiesPage';
 import SettingsPage from './pages/manage/SettingsPage';
 import UserFormPage from './pages/manage/UserFormPage';
@@ -120,10 +122,26 @@ export default function App() {
             }
           />
           <Route
+            path="/manage/masters/states"
+            element={
+              <RequireManage>
+                <StatesPage />
+              </RequireManage>
+            }
+          />
+          <Route
             path="/manage/masters/districts"
             element={
               <RequireManage>
                 <DistrictsPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/masters/talukas"
+            element={
+              <RequireManage>
+                <TalukasPage />
               </RequireManage>
             }
           />

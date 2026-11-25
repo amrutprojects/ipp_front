@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, openFile } from '../api';
 import { LangToggle } from '../components/AuthLayout';
 import { DocumentField, kb } from '../components/DocumentField';
-import { StepFields, useFormRules } from '../components/FormFields';
+import { StepFields, useFocusWrong, useFormRules } from '../components/FormFields';
 import { HelpButton } from '../components/HelpButton';
 import { SupportMessage } from '../components/SupportMessage';
 import { WelcomeDialog } from '../components/WelcomeDialog';
@@ -246,17 +246,21 @@ function FormWizard({
     if (keys.some((k) => errors[k])) setErrors((e) => ({ ...e, ...Object.fromEntries(keys.map((k) => [k, ''])) }));
   };
   const rules = useFormRules({ form, model, set: setField, clearErrors });
+  const focusWrong = useFocusWrong();
 
-  /* On resume: a saved centre or technology that is no longer offered is cleared (and saved), and the student told. */
+  /*
+   * On resume: a saved centre or technology that is no longer offered is cleared (and saved), and the student told. One that is
+   * not asked any more is left alone.
+   */
   useEffect(() => {
-    const centres = model.choices('centre_id', form);
+    const centres = model.get('centre_id') && model.choices('centre_id', form);
     if (form.centre_id && centres && !centres.some((c) => c.value === form.centre_id)) {
       setField('centre_id', '');
       rules.setWarning(
         T('आपण निवडलेले केंद्र आता उपलब्ध नाही. कृपया केंद्र पुन्हा निवडा.', 'The center you chose earlier is no longer available. Please choose the center again.'),
       );
     }
-    const technologies = model.choices('technology', form);
+    const technologies = model.get('technology') && model.choices('technology', form);
     if (form.technology && technologies?.length && !technologies.some((t) => t.value === form.technology)) {
       setField('technology', '');
       rules.setWarning(
@@ -280,7 +284,14 @@ function FormWizard({
     const local = checkFields(form, model.rules(model.step(step), form), { T });
     setErrors(local);
     setFailure(correctThese(local, options, model));
+    focusWrong(local);
     if (!Object.keys(local).length) setConfirmNext(true);
+  };
+
+  /* What is said on top of a refused save: in the student's language when it is the message of one field's check. */
+  const refusal = (err: Error) => {
+    const key = err instanceof ApiError ? Object.entries(err.fields()).find(([, m]) => m === err.message)?.[0] : undefined;
+    return key ? model.said(key, err.message) : err.message;
   };
 
   /* Confirmed: saved and checked on the server (which also checks active masters and the Aadhaar), then the next step. */
@@ -299,8 +310,11 @@ function FormWizard({
       go(step + 1);
     } catch (err) {
       setConfirmNext(false);
-      if (err instanceof ApiError && err.details.length) setErrors(err.fields());
-      fail(err instanceof Error ? err.message : 'Could not save this step');
+      if (err instanceof ApiError && err.details.length) {
+        setErrors(err.fields());
+        focusWrong(err.fields(), true);
+      }
+      fail(err instanceof Error ? refusal(err) : 'Could not save this step');
     } finally {
       setBusy(false);
     }
@@ -348,6 +362,7 @@ function FormWizard({
     const first = Object.keys(e).map(model.stepOf).sort()[0];
     if (first && first !== step) go(first);
     setFailure(correctThese(e, options, model));
+    focusWrong(e);
     return !Object.keys(e).length;
   };
 
@@ -385,7 +400,8 @@ function FormWizard({
       setErrors(fields);
       const first = Object.keys(fields).map(model.stepOf).sort()[0];
       if (first) go(first);
-      fail(err instanceof Error ? err.message : 'Submission failed');
+      focusWrong(fields, true);
+      fail(err instanceof Error ? refusal(err) : 'Submission failed');
       return;
     }
     /* Submitted: shown as such even if reloading the page afterwards fails. */
@@ -435,7 +451,13 @@ function FormWizard({
         </p>
         {failure ? <Notice tone="error">{failure}</Notice> : null}
 
-        {step === 1 || step === 2 ? <StepFields key={step} step={step} model={model} form={form} errors={errors} rules={rules} /> : null}
+        {step === 1 || step === 2 ? (
+          model.step(step).length ? (
+            <StepFields key={step} step={step} model={model} form={form} errors={errors} rules={rules} />
+          ) : (
+            <p>{T('या टप्प्यात भरण्यासाठी काही नाही. पुढे जाण्यासाठी Save & Next निवडा.', 'There is nothing to fill in here. Choose Save & Next to go on.')}</p>
+          )
+        ) : null}
 
         {step === 3 ? (
           <DocumentsStep
