@@ -87,7 +87,7 @@ const BATCH: Batch = {
   start_date: '2026-12-01',
   end_date: '2027-03-01',
   delivery_mode: 'BLENDED',
-  technology: { code: 'T03', name: 'Web Design' },
+  technology: { id: 'T03', code: 'T03', name: 'Web Design' },
   other_centre: 2,
 };
 const OLD_MEMBER: BatchMember = {
@@ -261,14 +261,18 @@ describe('Create batch: dates, delivery mode and technology', () => {
     const mode = within(dialog).getByLabelText(/^Delivery mode/);
     expect(mode).toHaveValue('OFFLINE');
     expect(optionsOf(mode)).toEqual(['Offline (classroom)', 'Online', 'Blended']);
-    const tech = within(dialog).getByLabelText('Technology');
-    await waitFor(() => expect(optionsOf(tech)).toEqual(['Select technology (optional)', 'Data Analytics (T01)', 'Web Design (T03)']));
+    const tech = within(dialog).getByLabelText(/^Technology/);
+    await waitFor(() => expect(optionsOf(tech)).toEqual(['Select technology', 'Data Analytics (T01)', 'Web Design (T03)']));
     expect(Object.fromEntries(calls.find((c) => c.path === '/manage/masters/TECHNOLOGY')!.query)).toEqual({ page: '1', limit: '100', status: 'ACTIVE' });
 
     await nameAndCentre(dialog);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create batch' }));
+    expect(within(dialog).getByText('Please select a technology.')).toBeInTheDocument();
+    expect(sent(calls, 'POST')).toEqual([]);
+    await userEvent.selectOptions(tech, 'T01');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create batch' }));
     expect(await screen.findByText(/Batch "Pune Batch 1" created with 3 students/)).toBeInTheDocument();
-    expect(sent(calls, 'POST')).toEqual([{ name: 'Pune Batch 1', centre_id: 'c1', ids: ['s1', 's2', 's3'] }]);
+    expect(sent(calls, 'POST')).toEqual([{ name: 'Pune Batch 1', centre_id: 'c1', ids: ['s1', 's2', 's3'], technology: 'T01' }]);
   });
 
   it('fills the end date with three months later, as long as it is not given by hand', async () => {
@@ -294,7 +298,7 @@ describe('Create batch: dates, delivery mode and technology', () => {
     await nameAndCentre(dialog);
     await userEvent.selectOptions(within(dialog).getByLabelText(/^Delivery mode/), 'BLENDED');
     await waitFor(() => expect(within(dialog).getByRole('option', { name: 'Web Design (T03)' })).toBeInTheDocument());
-    await userEvent.selectOptions(within(dialog).getByLabelText('Technology'), 'T03');
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^Technology/), 'T03');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create batch' }));
     await screen.findByText(/Batch "Pune Batch 1" created/);
     expect(sent(calls, 'POST')).toEqual([
@@ -328,9 +332,10 @@ describe('Create batch: dates, delivery mode and technology', () => {
     expect(within(dialog).getByText('End date must be after the start date')).toBeInTheDocument();
     expect(end).toHaveAttribute('aria-invalid', 'true');
     expect(sent(calls, 'POST')).toEqual([]);
-    /* Without dates it is created: they may be given later. */
+    /* Dates may be left empty, but technology is required. */
     setDate(start, '');
     setDate(end, '');
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^Technology/), 'T01');
     await userEvent.click(create);
     await screen.findByText(/Batch "Pune Batch 1" created/);
     expect(sent(calls, 'POST')).toHaveLength(1);
@@ -349,10 +354,12 @@ describe('Create batch: dates, delivery mode and technology', () => {
     const dialog = await openDialog();
     await nameAndCentre(dialog);
     setDate(within(dialog).getByLabelText('Start date'), '2026-12-01');
+    await waitFor(() => expect(within(dialog).getByRole('option', { name: 'Data Analytics (T01)' })).toBeInTheDocument());
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^Technology/), 'T01');
     const create = within(dialog).getByRole('button', { name: 'Create batch' });
     await userEvent.click(create);
     expect(await within(dialog).findByText('Please correct the highlighted fields.')).toBeInTheDocument();
-    for (const [label, d] of [/Batch name/, 'Start date', 'End date', /^Delivery mode/, 'Technology'].map((l, i) => [l, details[i]!] as const))
+    for (const [label, d] of [/Batch name/, 'Start date', 'End date', /^Delivery mode/, /^Technology/].map((l, i) => [l, details[i]!] as const))
       expect(within(dialog).getByLabelText(label)).toHaveAccessibleDescription(d.message);
 
     /* The name is taken: said at the field and on top. */
@@ -406,15 +413,15 @@ describe('Create batch: dates, delivery mode and technology', () => {
     );
   });
 
-  it('still creates a batch when the technologies cannot be loaded', async () => {
+  it('does not create a batch when the technologies cannot be loaded', async () => {
     const calls = mockApi({ technologies: () => json(500, { message: 'Server error' }) });
     const dialog = await openDialog();
     expect(await within(dialog).findByText('Could not load the technologies.')).toBeInTheDocument();
-    expect(optionsOf(within(dialog).getByLabelText('Technology'))).toEqual(['Select technology (optional)']);
+    expect(optionsOf(within(dialog).getByLabelText(/^Technology/))).toEqual(['Select technology']);
     await nameAndCentre(dialog);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create batch' }));
-    await screen.findByText(/Batch "Pune Batch 1" created/);
-    expect(sent(calls, 'POST')).toHaveLength(1);
+    expect(within(dialog).getByText('Please select a technology.')).toBeInTheDocument();
+    expect(sent(calls, 'POST')).toHaveLength(0);
   });
 });
 
@@ -467,7 +474,7 @@ describe('Batches: code, dates, delivery mode and technology', () => {
     expect(start).toHaveValue('2026-12-01');
     expect(end).toHaveValue('2027-03-01');
     expect(screen.getByLabelText(/^Delivery mode/)).toHaveValue('BLENDED');
-    expect(screen.getByLabelText('Technology')).toHaveValue('T03');
+    expect(screen.getByLabelText(/^Technology/)).toHaveValue('T03');
     await userEvent.click(screen.getByRole('button', { name: 'Save details' }));
     expect(screen.getByText('Nothing to save: the name and centre are unchanged.')).toBeInTheDocument();
 
@@ -491,12 +498,11 @@ describe('Batches: code, dates, delivery mode and technology', () => {
 
     setDate(screen.getByLabelText('End date'), '');
     setDate(screen.getByLabelText('Start date'), '');
-    await userEvent.selectOptions(screen.getByLabelText('Technology'), '');
     await userEvent.click(screen.getByRole('button', { name: 'Save details' }));
     await waitFor(() => expect(sent(calls, 'PATCH')).toHaveLength(2));
     expect(sent(calls, 'PATCH')).toEqual([
       { start_date: '2026-12-08', delivery_mode: 'OFFLINE' },
-      { start_date: null, end_date: null, technology: null },
+      { start_date: null, end_date: null },
     ]);
   });
 
@@ -510,20 +516,21 @@ describe('Batches: code, dates, delivery mode and technology', () => {
     });
     renderAt('/manage/batches/b1');
     await waitFor(() => expect(screen.getByRole('option', { name: 'Data Analytics (T01)' })).toBeInTheDocument());
-    await userEvent.selectOptions(screen.getByLabelText('Technology'), 'T01');
+    await userEvent.selectOptions(screen.getByLabelText(/^Technology/), 'T01');
     await userEvent.click(screen.getByRole('button', { name: 'Save details' }));
     expect(await screen.findByText('Please correct the highlighted fields.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Technology')).toHaveAccessibleDescription('Technology not found or inactive');
+    expect(screen.getByLabelText(/^Technology/)).toHaveAccessibleDescription('Technology not found or inactive');
   });
 
-  it('keeps an inactive technology of the batch selectable', async () => {
-    mockApi({ detail: { ...DETAIL, technology: { code: 'T09', name: 'Old Track' } } });
+  it('requires an active replacement for an inactive batch technology', async () => {
+    mockApi({ detail: { ...DETAIL, technology: { id: 'T09', code: 'T09', name: 'Old Track' } } });
     renderAt('/manage/batches/b1');
-    const tech = await screen.findByLabelText('Technology');
+    const tech = await screen.findByLabelText(/^Technology/);
     await waitFor(() =>
-      expect(optionsOf(tech)).toEqual(['Select technology (optional)', 'Data Analytics (T01)', 'Web Design (T03)', 'Old Track (inactive) (T09)']),
+      expect(optionsOf(tech)).toEqual(['Select technology', 'Data Analytics (T01)', 'Web Design (T03)']),
     );
-    expect(tech).toHaveValue('T09');
+    await userEvent.click(screen.getByRole('button', { name: 'Save details' }));
+    expect(screen.getByText('Please select a technology.')).toBeInTheDocument();
   });
 
   it('does not break when an older API leaves everything out', async () => {
@@ -535,13 +542,13 @@ describe('Batches: code, dates, delivery mode and technology', () => {
     expect(within(row(/Asha Kulkarni/)).getByText('Technology').nextElementSibling).toHaveTextContent('—');
     expect(screen.getByLabelText('Start date')).toHaveValue('');
     expect(screen.getByLabelText(/^Delivery mode/)).toHaveValue('OFFLINE');
-    expect(screen.getByLabelText('Technology')).toHaveValue('');
+    expect(screen.getByLabelText(/^Technology/)).toHaveValue('');
     const name = screen.getByLabelText(/Batch name/);
     await userEvent.clear(name);
     await userEvent.type(name, 'Pune Batch One');
     await userEvent.click(screen.getByRole('button', { name: 'Save details' }));
-    expect(await screen.findByText('Batch details saved.')).toBeInTheDocument();
-    expect(sent(calls, 'PATCH')).toEqual([{ name: 'Pune Batch One' }]);
+    expect(screen.getByText('Please select a technology.')).toBeInTheDocument();
+    expect(sent(calls, 'PATCH')).toEqual([]);
   });
 
   it('offers every active center on the batch page too', async () => {

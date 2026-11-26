@@ -75,7 +75,7 @@ export default function BatchDetailPage() {
   const save = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!batch || busy) return;
-    const local = checkPlan(e.currentTarget, 'batch-edit', plan);
+    const local = checkPlan(e.currentTarget, 'batch-edit', plan, technologies);
     if (name.trim().length < 2) local.name = 'Enter a batch name (at least 2 characters)';
     if (!centreId) local.centre_id = 'Choose a centre';
     setErrors(local);
@@ -197,7 +197,6 @@ export default function BatchDetailPage() {
                 errors={errors}
                 technologies={technologies}
                 failed={technologiesFailed}
-                saved={batch}
               />
             </div>
             <div className="actions">

@@ -86,7 +86,7 @@ export default function CreateBatchDialog({
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (busy) return;
-    const local = checkPlan(e.currentTarget, 'batch', plan);
+    const local = checkPlan(e.currentTarget, 'batch', plan, technologies);
     if (name.trim().length < 2) local.name = 'Enter a batch name (at least 2 characters)';
     if (!centreId) local.centre_id = 'Choose a centre';
     setErrors(local);

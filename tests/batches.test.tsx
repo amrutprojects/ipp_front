@@ -59,6 +59,7 @@ const PAGES: Applicant[][] = [
 const BATCH: Batch = {
   id: 'b1',
   name: 'Pune Batch 1',
+  technology: { id: 'tech1', code: 'T01', name: 'Data Analytics' },
   centre: { id: 'c1', name: 'Pune Centre', code: 'PUN' },
   district: { id: PUNE, name: 'Pune' },
   students: 30,
@@ -153,6 +154,7 @@ function mockApi(opts: Opts = {}) {
         ],
         meta: { page: 1, limit: 100, total: 2, totalPages: 1 },
       });
+    if (url.includes('/manage/masters/TECHNOLOGY?')) return json(200, { data: [{ id: 'tech1', code: 'T01', name_en: 'Data Analytics', is_active: true }], meta: { page: 1, totalPages: 1 } });
     if (url.includes('/manage/applicants?')) {
       const page = Number(new URL(url, 'http://x').searchParams.get('page'));
       return json(200, { data: pages[page - 1], meta: { page, limit: 25, total: 50, totalPages: pages.length } });
@@ -242,6 +244,8 @@ describe('Create batch (tracking panel)', () => {
     await waitFor(() => expect(within(dialog).getByRole('option', { name: /Baramati Centre/ })).toBeInTheDocument());
     await userEvent.selectOptions(within(dialog).getByLabelText(/Centre/), 'c2');
     expect(dialog).toHaveTextContent('the Divisional Officer of Pune.');
+    await waitFor(() => expect(within(dialog).getByRole('option', { name: 'Data Analytics (T01)' })).toBeInTheDocument());
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^Technology/), 'tech1');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create batch' }));
     expect(await screen.findByText('Batch "Open batch" created with 1 student and sent to the Divisional Officer of Pune.')).toBeInTheDocument();
     expect(calls.find((c) => c.method === 'POST')).toMatchObject({ body: { name: 'Open batch', centre_id: 'c2', ids: ['s4'] } });
@@ -379,11 +383,13 @@ describe('Create batch (tracking panel)', () => {
     await userEvent.type(within(dialog).getByLabelText(/Batch name/), ' Pune Batch 1 ');
     await waitFor(() => expect(within(dialog).getByRole('option', { name: /Baramati Centre/ })).toBeInTheDocument());
     await userEvent.selectOptions(within(dialog).getByLabelText(/Centre/), 'c2');
+    await waitFor(() => expect(within(dialog).getByRole('option', { name: 'Data Analytics (T01)' })).toBeInTheDocument());
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^Technology/), 'tech1');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create batch' }));
     expect(await screen.findByText('Batch "Pune Batch 1" created with 3 students and sent to the Divisional Officer of Pune.')).toBeInTheDocument();
     expect(calls.find((c) => c.method === 'POST')).toMatchObject({
       url: expect.stringMatching(/\/manage\/batches$/),
-      body: { name: 'Pune Batch 1', centre_id: 'c2', ids: ['s1', 's2', 's6'] },
+      body: { name: 'Pune Batch 1', centre_id: 'c2', ids: ['s1', 's2', 's6'], technology: 'tech1' },
     });
     expect(createButton(0)).toBeDisabled();
   });
@@ -406,6 +412,8 @@ describe('Create batch (tracking panel)', () => {
     await userEvent.type(within(dialog).getByLabelText(/Batch name/), 'Pune Batch 1');
     await waitFor(() => expect(within(dialog).getByRole('option', { name: /Pune Centre/ })).toBeInTheDocument());
     await userEvent.selectOptions(within(dialog).getByLabelText(/Centre/), 'c1');
+    await waitFor(() => expect(within(dialog).getByRole('option', { name: 'Data Analytics (T01)' })).toBeInTheDocument());
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^Technology/), 'tech1');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create batch' }));
     expect(await within(dialog).findByText('A batch must have exactly 4 students; this one would have 3.')).toBeInTheDocument();
 

@@ -31,7 +31,6 @@ export function plusMonths(iso: string, months: number): string {
 /* What is wrong with the dates; `half` = a date box that is only half filled in (it reads as empty). */
 export function planIssues(p: BatchPlan, half: { start_date?: boolean; end_date?: boolean } = {}): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!p.technology) e.technology = 'Please select a technology.';
   if (half.start_date || (p.start_date && !isPlanDate(p.start_date))) e.start_date = 'Enter a valid start date';
   if (p.start_date && !e.start_date && p.end_date && p.end_date <= p.start_date) e.end_date = 'End date must be after the start date';
   else if (half.end_date || (p.end_date && !isPlanDate(p.end_date))) e.end_date = 'Enter a valid end date';
