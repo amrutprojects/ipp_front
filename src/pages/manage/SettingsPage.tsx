@@ -20,6 +20,7 @@ import {
   type SupportForm,
   type WelcomeForm,
 } from '../../validation';
+import { SETTING_TITLE, type RejectionSettings } from '../../returns';
 import LinkSection from './LinkSection';
 import { ManageShell } from './ManageLayout';
 
@@ -348,6 +349,36 @@ function WelcomeSection() {
           <p className="hint">Switched off: students go straight to the form after verifying their mobile number.</p>
         )}
       </div>
+    </SettingsCard>
+  );
+}
+
+/* ---------- Sending a form back to the candidate (rejection e-mail and resubmission) ---------- */
+
+function RejectionSection() {
+  const state = useSettingsForm<RejectionSettings, { enabled: boolean }>({
+    path: '/manage/settings/rejection',
+    blank: { enabled: false },
+    toForm: (s) => ({ enabled: s.enabled === true }),
+    toBody: (f) => ({ enabled: f.enabled }),
+    issues: () => ({}),
+    saved: 'Setting saved.',
+  });
+  const { form, edit } = state;
+  return (
+    <SettingsCard
+      id="s-rejection"
+      title={SETTING_TITLE}
+      sub="Lets the Auditor reject a submitted form back to the candidate, with a reason. The candidate gets an e-mail with the reason, logs in with their existing credentials, corrects the details and saves — which resubmits the form to the Auditor automatically."
+      state={state}
+      unsaved="Not saved yet: switched off."
+    >
+      <ShownToggle on={form.enabled} label={SETTING_TITLE} onChange={(v) => edit(() => ({ enabled: v }))} />
+      <p className="hint mt8">
+        {form.enabled
+          ? 'On: the student page shows "Reject and send back to candidate" for a form that is with the Auditor.'
+          : 'Off: no rejection e-mail is sent and the Auditor works as before (approve, or correct the form). Forms already sent back stay with their candidate until they resubmit.'}
+      </p>
     </SettingsCard>
   );
 }
@@ -682,6 +713,7 @@ export default function SettingsPage() {
       <SupportSection />
       <WelcomeSection />
       <HelpSection />
+      <RejectionSection />
     </ManageShell>
   );
 }

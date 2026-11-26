@@ -450,6 +450,11 @@ export default function ManagePage() {
                     </td>
                     <td>
                       <ApprovalStageCell approval={r.approval} waiting={r.stage === 'SUBMITTED'} />
+                      {(r as typeof r & { returned_at?: string | null }).returned_at ? (
+                        <div className="mt8">
+                          <span className="badge do-REJECTED">Sent back to the candidate</span>
+                        </div>
+                      ) : null}
                       {blocked(r)?.show ? <div className="hint">{blocked(r)!.reason}</div> : null}
                     </td>
                     <td className="nowrap">{fmtDate(r.account_created_at)}</td>

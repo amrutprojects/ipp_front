@@ -13,6 +13,7 @@ import { useStudent } from '../session';
 import type { Application, DocumentType, Form, Options, Submitted } from '../types';
 import { checkFields, fileIssue } from '../validation';
 import { settleWelcome, welcomeOwed } from '../welcome';
+import CorrectionView, { type ReturnedApplication } from './CorrectionView';
 
 const STEPS = ['Basic Details', 'Main Form', 'Upload Documents'] as const;
 const DECLARATION =
@@ -120,6 +121,19 @@ export default function ApplicationPage() {
               await reload().catch(() =>
                 setFlash(`${message} Please refresh the page to see your registration.`),
               );
+            }}
+          />
+        ) : (app as ReturnedApplication).returned ? (
+          /* Sent back by the Auditor: the candidate corrects it and saves, which resubmits it. */
+          <CorrectionView
+            key={(app as ReturnedApplication).returned!.at}
+            app={app as ReturnedApplication}
+            options={options}
+            onApp={setApp}
+            onDone={async (message) => {
+              setFlash(message);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              await reload().catch(() => undefined);
             }}
           />
         ) : (

@@ -8,6 +8,7 @@ import { MAIN_FIELDS, type Applicant, type ApplicantDetail, type DocumentCheckSa
 import ApprovalHistory from './ApprovalHistory';
 import ApprovalStageCell from './ApprovalStageCell';
 import ApproveDialog from './ApproveDialog';
+import { RejectButton, ReturnsCard, useReturns } from './ReturnToCandidate';
 import FollowUpDialog from './FollowUpDialog';
 import { ManageShell } from './ManageLayout';
 import { useCanEdit } from '../../session';
@@ -225,6 +226,8 @@ export default function ApplicantDetailPage() {
   useEffect(() => {
     if (loaded) loadHistory();
   }, [loaded, loadHistory]);
+  /* Sent back to the candidate (ReturnToCandidate.tsx). */
+  const returns = useReturns(id, loaded);
 
   const back = (
     <p className="mt8">
@@ -246,8 +249,9 @@ export default function ApplicantDetailPage() {
   const uploaded = detail.documents.filter((x) => x.file);
   const verified = uploaded.filter((x) => x.verified?.verified);
   const allVerified = uploaded.length > 0 && verified.length === uploaded.length;
-  /* With the Auditor: can be approved once every uploaded document is verified. */
-  const withAuditor = submitted && !detail.approval?.stage;
+  /* With the Auditor (not sent back to the candidate): can be approved once every uploaded document is verified. */
+  const withCandidate = !!returns.data?.open;
+  const withAuditor = submitted && !detail.approval?.stage && !withCandidate;
   /* What the follow-up dialog needs to know about the student (it is shared with the list). */
   const applicant: Applicant = {
     id: account.id,
@@ -320,6 +324,18 @@ export default function ApplicantDetailPage() {
               Approve
             </button>
           ) : null}
+          {canEdit && withAuditor ? (
+            <RejectButton
+              id={account.id}
+              name={account.name || name}
+              returns={returns.data}
+              onDone={(message) => {
+                setFlash(message);
+                returns.reload();
+                void reload();
+              }}
+            />
+          ) : null}
         </div>
         {canEdit && withAuditor && !allVerified ? (
           <p className="approve-why" id="approve-why">
@@ -357,6 +373,7 @@ export default function ApplicantDetailPage() {
         </div>
       </section>
 
+      {submitted ? <ReturnsCard returns={returns.data} /> : null}
       {submitted ? (
         <Card title="Approval history">
           <ApprovalHistory events={detail.history ?? []} />

@@ -394,7 +394,7 @@ export interface Applicant {
 export type ApprovalStage = 'BATCH' | 'DIVISION' | 'COEP' | 'HEAD_OFFICE' | 'ADMIN' | 'APPROVED';
 export type StagePoint = 'AUDITOR' | ApprovalStage;
 /* The summary's approval counts: with the Auditor (RETURNED = of those, sent back), or at a stage. */
-export type ApprovalFilter = 'AWAITING' | 'RETURNED' | ApprovalStage;
+export type ApprovalFilter = 'AWAITING' | 'RETURNED' | 'WITH_CANDIDATE' | ApprovalStage;
 
 /*
  * The list's "Stage of application" filter: how far the form got, then whom it is with (AUDITOR = submitted and waiting
@@ -407,6 +407,8 @@ export const APPLICATION_STAGES = [
   'MAIN_DONE',
   'AUDITOR',
   'RETURNED',
+  /* Sent back to the candidate to correct (src/returns.ts). */
+  'WITH_CANDIDATE',
   'BATCH',
   'DIVISION',
   'COEP',
