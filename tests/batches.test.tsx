@@ -544,7 +544,7 @@ describe('Batches (tracking panel)', () => {
     await userEvent.click(history);
     const moves = await screen.findAllByRole('listitem');
     expect(moves).toHaveLength(2);
-    expect(moves[0]).toHaveTextContent(/Rejected by COEP.*sent back to Divisional Officer.*COEP Reviewer.*Reason: Photo is not clear/);
+    expect(moves[0]).toHaveTextContent(/Rejected by COEP.*sent back to Divisional Officer.*COEP Reviewer.*Rejection reason: Photo is not clear/);
     expect(moves[1]).toHaveTextContent(/Approved by Divisional Officer.*sent to COEP/);
     expect(calls.some((c) => c.url.endsWith('/manage/applicants/s2'))).toBe(true);
     await userEvent.click(history);

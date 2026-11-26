@@ -393,7 +393,7 @@ describe('what comes back', () => {
     );
     const items = screen.getAllByRole('listitem').map((li) => li.textContent);
     expect(items[0]).toMatch(/^Moved from Head Officeto Super Admin.* · Super One \(Super Admin\)$/);
-    expect(items[1]).toMatch(/^Rejected by COEPsent back to Divisional Officer.* · Coep One \(COEP\)Reason: Marks$/);
+    expect(items[1]).toMatch(/^Rejected by COEPsent back to Divisional Officer.* · Coep One \(COEP\)Rejection reason: Marks$/);
     expect(items[2]).toMatch(/^Approved by Divisional Officersent to COEP.* · Officer One \(Divisional Officer\)$/);
     expect(items[3]).toMatch(/^Put into a batchsent to Divisional Officer.* · Program Auditor$/);
   });

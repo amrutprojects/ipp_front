@@ -435,7 +435,7 @@ export interface ApprovalEvent {
   action: 'APPROVE' | 'REJECT' | 'MOVE';
   from: { stage: StagePoint; name: string };
   to: { stage: StagePoint; name: string };
-  /* A rejection's reason. */
+  /* Why: a rejection's reason, or an approval's (none for an approval made before reasons were asked). */
   reason: string | null;
   by: string | null;
   /* The officer's role in Sarthi (absent or null: somebody of this panel). */
@@ -456,6 +456,11 @@ export interface Approval {
   register_id: string | null;
   /* The batch the student is in (it stays the same when the student is sent back). */
   batch: { id: string; name: string } | null;
+  /*
+   * With the Auditor after a rejection or a return to the candidate: approving it again is a second approval, which needs
+   * a reason (a first approval does not). Absent from an older API.
+   */
+  reason_required?: boolean;
 }
 
 /*

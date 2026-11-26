@@ -395,6 +395,7 @@ describe('Tracking panel: one student', () => {
     await userEvent.click(approve);
     const dialog = screen.getByRole('alertdialog', { name: "Approve Kavya Jadhav's form?" });
     expect(dialog).toHaveTextContent('The submitted form (IPP-000001) will be approved and wait for a batch.');
+    expect(within(dialog).queryByLabelText(/^Approval reason/)).not.toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve' }));
     expect(await screen.findByText("Kavya Jadhav's form approved. Put it into a batch to send it to the Divisional Officer.")).toBeInTheDocument();
     expect(await screen.findByText('Approved: waiting for a batch')).toBeInTheDocument();
@@ -556,7 +557,7 @@ describe('Tracking panel: one student', () => {
     const card = await screen.findByRole('region', { name: 'Approval history' });
     const moves = within(card).getAllByRole('listitem');
     expect(moves).toHaveLength(4);
-    expect(moves[0]).toHaveTextContent(/Rejected by COEP.*sent back to Divisional Officer.*24 Nov(ember)? 2026.*COEP Reviewer.*Reason: Photo is not clear/);
+    expect(moves[0]).toHaveTextContent(/Rejected by COEP.*sent back to Divisional Officer.*24 Nov(ember)? 2026.*COEP Reviewer.*Rejection reason: Photo is not clear/);
     expect(moves[1]).toHaveTextContent(/Approved by Divisional Officer.*sent to COEP.*Divisional Officer Pune/);
     expect(moves[2]).toHaveTextContent(/Put into a batch.*sent to Divisional Officer/);
     expect(moves[3]).toHaveTextContent(/Approved by Auditor.*waiting for a batch.*Program Auditor/);

@@ -154,6 +154,7 @@ function mockApi(role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
                 can_approve: true,
                 approval: approval({
                   batch: BATCH,
+                  reason_required: true,
                   last_event: {
                     action: 'REJECT',
                     from: point('DIVISION', 'Divisional Officer'),
@@ -310,16 +311,82 @@ describe('Tracking panel approval stages', () => {
     expect(dialog).toHaveTextContent(
       'The submitted form will be approved and wait for a batch. Put it into a batch to send it to the Divisional Officer. This cannot be undone.',
     );
+    /* A first approval: no reason is asked. */
+    expect(within(dialog).queryByLabelText(/^Approval reason/)).not.toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve' }));
     expect(
       await screen.findByText("Asha Kulkarni's form approved. Put it into a batch to send it to the Divisional Officer."),
     ).toBeInTheDocument();
-    expect(calls.some((c) => c.method === 'POST' && c.url.endsWith(`/manage/applicants/${ID.submitted}/approve`))).toBe(true);
+    expect(calls.find((c) => c.method === 'POST' && c.url.endsWith(`/manage/applicants/${ID.submitted}/approve`))?.body).toEqual({});
     await waitFor(() => expect(within(row('Asha Kulkarni')).getByText('Approved: waiting for a batch')).toBeInTheDocument());
     /* Its checkbox is now the one for a batch. */
     expect(within(row('Asha Kulkarni')).getByRole('checkbox', { name: 'Select Asha Kulkarni for a batch' })).toBeInTheDocument();
     expect(within(row('Asha Kulkarni')).getAllByRole('checkbox')).toHaveLength(1);
     expect(row('Asha Kulkarni')).toHaveTextContent('Approved by Auditor (Program Auditor)');
+  });
+
+  it('asks the reason of a second approval (a form rejected before): 3 to 500 characters, said at the box', async () => {
+    const calls = mockApi();
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: "Approve Meera Joshi's form" }));
+    const dialog = screen.getByRole('alertdialog', { name: "Approve Meera Joshi's form?" });
+    const box = within(dialog).getByLabelText(/^Approval reason/);
+    const yes = within(dialog).getByRole('button', { name: 'Yes, approve' });
+    expect(box).toHaveFocus();
+    expect(yes).toBeDisabled();
+    await userEvent.type(box, '  ok ');
+    await userEvent.click(yes);
+    expect(within(dialog).getByText('Enter an approval reason of at least 3 characters.')).toBeInTheDocument();
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    await userEvent.clear(box);
+    await userEvent.click(box);
+    await userEvent.paste('x'.repeat(501));
+    await userEvent.click(yes);
+    expect(within(dialog).getByText('The approval reason can have at most 500 characters.')).toBeInTheDocument();
+    /* Nothing was sent. */
+    expect(calls.some((c) => c.url.includes('/approve'))).toBe(false);
+  });
+
+  it('shows the reason box when the API asks for it (a form rejected meanwhile), and sends the reason then', async () => {
+    const calls = mockApi();
+    let first = true;
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (first && url.endsWith(`/manage/applicants/${ID.submitted}/approve`)) {
+        first = false;
+        return new Response(
+          JSON.stringify({
+            success: false,
+            message: 'Validation failed',
+            error: {
+              code: 'VALIDATION_ERROR',
+              details: [{ field: 'body.reason', message: 'Approval reason is required: the form was rejected before, so this is its second approval.' }],
+            },
+          }),
+          { status: 422, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return real(input, init);
+    }) as typeof fetch;
+    try {
+      renderPage();
+      await userEvent.click(await screen.findByRole('button', { name: "Approve Asha Kulkarni's form" }));
+      const dialog = screen.getByRole('alertdialog', { name: "Approve Asha Kulkarni's form?" });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve' }));
+      expect(
+        await within(dialog).findByText('Approval reason is required: the form was rejected before, so this is its second approval.'),
+      ).toBeInTheDocument();
+      await userEvent.type(within(dialog).getByLabelText(/^Approval reason/), 'Returned form checked');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve' }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === 'POST' && c.url.endsWith(`/manage/applicants/${ID.submitted}/approve`))?.body).toEqual({
+          reason: 'Returned form checked',
+        }),
+      );
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 
   it('approves a student sent back from a batch straight to the Divisional Officer, in the same batch', async () => {
@@ -328,6 +395,7 @@ describe('Tracking panel approval stages', () => {
     await userEvent.click(await screen.findByRole('button', { name: "Approve Meera Joshi's form" }));
     const dialog = screen.getByRole('alertdialog', { name: "Approve Meera Joshi's form?" });
     expect(dialog).toHaveTextContent('The submitted form will go straight back to the Divisional Officer, in the same batch (Pune Batch 1).');
+    await userEvent.type(within(dialog).getByLabelText(/^Approval reason/), 'Documents checked');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve' }));
     expect(await screen.findByText("Meera Joshi's form approved and sent back to the Divisional Officer in batch Pune Batch 1.")).toBeInTheDocument();
     await waitFor(() => expect(within(row('Meera Joshi')).getByText('With Divisional Officer')).toBeInTheDocument());
@@ -344,6 +412,7 @@ describe('Tracking panel approval stages', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Approve selected (1)' }));
     const dialog = screen.getByRole('alertdialog', { name: 'Approve 1 selected form?' });
     expect(dialog).toHaveTextContent('1 form will be approved and wait for a batch, to be sent to the Divisional Officer. This cannot be undone.');
+    expect(within(dialog).queryByLabelText(/^Approval reason/)).not.toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve selected' }));
     expect(await screen.findByText('1 form approved. Put it into a batch to send it to the Divisional Officer.')).toBeInTheDocument();
     expect(calls.find((c) => c.url.endsWith('/manage/applicants/approve-selected'))?.body).toEqual({ ids: [ID.submitted] });
@@ -367,13 +436,14 @@ describe('Tracking panel approval stages', () => {
       '1 form will be approved and wait for a batch, to be sent to the Divisional Officer. 1 student is already in a batch and will go straight back to the Divisional Officer in it. This cannot be undone.',
     );
     expect(within(dialog).getByText(/Meera Joshi/)).toHaveTextContent('Meera Joshi · back to Pune Batch 1');
+    await userEvent.type(within(dialog).getByLabelText(/^Approval reason/), 'Documents checked');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, approve selected' }));
     expect(
       await screen.findByText(
         '2 forms approved. Put those not in a batch yet into one to send them to the Divisional Officer; those already in a batch went straight back to the Divisional Officer.',
       ),
     ).toBeInTheDocument();
-    expect(calls.find((c) => c.url.endsWith('/manage/applicants/approve-selected'))?.body).toEqual({ ids: [ID.submitted, ID.returned] });
+    expect(calls.find((c) => c.url.endsWith('/manage/applicants/approve-selected'))?.body).toEqual({ ids: [ID.submitted, ID.returned], reason: 'Documents checked' });
   });
 
   it('shows no approve or batch buttons or checkboxes to a view-only account', async () => {

@@ -27,7 +27,11 @@ export default function ApprovalHistory({ events }: { events: ApprovalEvent[] })
                 {e.by && e.role ? ` (${e.role})` : ''}
               </span>
             </div>
-            {e.reason ? <p className="fu-note-full">Reason: {e.reason}</p> : null}
+            {e.reason ? (
+              <p className="fu-note-full">
+                {e.action === 'REJECT' ? 'Rejection reason' : 'Approval reason'}: {e.reason}
+              </p>
+            ) : null}
           </li>
         ))}
       </ol>
