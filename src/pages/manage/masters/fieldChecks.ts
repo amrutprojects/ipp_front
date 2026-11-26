@@ -7,20 +7,20 @@ import { limitOf, OWN_TEXTAREA_MAX, OWN_TEXT_MAX, realDate, regexIssue, rulesOf,
  */
 
 /* The limits of each type, two to a row: minimum, maximum. */
+const DIFFERENT: [RuleType, string] = ['different_from', 'Must be different from'];
 export const LIMITS: Partial<Record<FieldType, [RuleType, string][]>> = {
-  TEXT: [
-    ['min_length', 'Minimum characters'],
-    ['max_length', 'Maximum characters'],
-  ],
-  TEXTAREA: [
-    ['min_length', 'Minimum characters'],
-    ['max_length', 'Maximum characters'],
-  ],
+  TEXT: [['min_length', 'Minimum characters'], ['max_length', 'Maximum characters'], DIFFERENT],
+  TEXTAREA: [['min_length', 'Minimum characters'], ['max_length', 'Maximum characters'], DIFFERENT],
+  EMAIL: [DIFFERENT],
+  MOBILE: [DIFFERENT],
+  URL: [DIFFERENT],
   NUMBER: [
     ['min_value', 'Minimum value'],
     ['max_value', 'Maximum value'],
     ['min_digits', 'Minimum digits'],
     ['max_digits', 'Maximum digits'],
+    ['max_decimals', 'Maximum decimal places'],
+    DIFFERENT,
   ],
   DATE: [
     ['min_date', 'Earliest date'],
@@ -51,7 +51,11 @@ export const CHECK_LABEL: Partial<Record<RuleType, string>> = {
   pin_code: 'PIN code (6 digits)',
   pan: 'PAN number',
   ifsc: 'IFSC code',
+  email: 'Email address',
+  indian_mobile: 'Indian mobile number (10 digits, starting 6–9)',
+  aadhaar: 'Aadhaar number (12 digits, with its check digit)',
   whole_number: 'Whole number',
+  grading_scale: 'Within its grading (a percentage 0–100, a CGPA up to its scale)',
   not_future: 'Not in the future',
   not_past: 'Not in the past',
 };
@@ -141,6 +145,7 @@ function wholeRange(rule: RuleType, type: FieldType): [number, number] | null {
   if (rule.endsWith('_digits')) return [1, 16];
   if (rule.endsWith('_age')) return [0, 120];
   if (rule.endsWith('_choices')) return [1, 100];
+  if (rule.endsWith('_decimals')) return [0, 4];
   return rule.endsWith('_value') && type === 'YEAR' ? [YEAR_MIN, YEAR_MAX] : null;
 }
 function limitIssue(rule: RuleType, type: FieldType, text: string): string {
@@ -150,6 +155,8 @@ function limitIssue(rule: RuleType, type: FieldType, text: string): string {
       return realDate(text) && text >= '1900-01-01' && text <= '2200-12-31' ? '' : 'Enter a real date';
     case 'time':
       return TIME_RE.test(text) ? '' : 'Enter a time';
+    case 'field':
+      return /^[a-z][a-z0-9_]*$/.test(text) ? '' : 'Choose a field';
     default: {
       const range = wholeRange(rule, type);
       if (!range) return /^-?\d{1,12}(\.\d{1,4})?$/.test(text) ? '' : 'Enter a number';
@@ -237,11 +244,12 @@ function limitsText(v: FieldValidation): string[] {
     ...pair('age', (a, b) => (a && b ? `age ${a === b ? a : `${a}–${b}`}` : a ? `age at least ${a}` : `age at most ${b}`)),
     ...pair('time', (a, b) => (a && b ? `from ${a} to ${b}` : a ? `${a} or later` : `${b} or earlier`)),
     ...pair('choices', (a, b) => counted(a, b, 'choice')),
+    ...(value('max_decimals') === undefined ? [] : [value('max_decimals') === '0' ? 'no decimals' : `at most ${plural(value('max_decimals')!, 'decimal place')}`]),
   ];
 }
 
-/* "3–50 characters, Letters only, 1 expression, 1 function"; '' = none. */
-export function checksText(v: FieldValidation | null | undefined): string {
+/* "3–50 characters, Letters only, different from Mobile Number, 1 expression"; '' = none. `labelOf` names another field. */
+export function checksText(v: FieldValidation | null | undefined, labelOf: (key: string) => string = (k) => k): string {
   if (!v) return '';
   const own = (kind: CustomCheck['kind'], one: string) => {
     const n = (v.custom ?? []).filter((c) => c.kind === kind).length;
@@ -250,6 +258,7 @@ export function checksText(v: FieldValidation | null | undefined): string {
   return [
     ...limitsText(v),
     ...(v.rules ?? []).flatMap((r) => CHECK_LABEL[r.type]?.replace(/ \(.*\)$/, '') ?? []),
+    ...(v.rules ?? []).flatMap((r) => (r.type === 'different_from' && typeof r.value === 'string' ? [`different from ${labelOf(r.value)}`] : [])),
     ...own('REGEX', 'expression'),
     ...own('JS', 'function'),
   ].join(', ');

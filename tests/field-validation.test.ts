@@ -55,7 +55,20 @@ describe('Ready-made checks and limits of an own field', () => {
     ['YEAR', { type: 'max_value', value: 2030 }, ['2030'], ['2031'], 'Own must be at most 2030', 'Own: जास्तीत जास्त २०३० असावे'],
     ['CHECKBOXES', { type: 'min_choices', value: 2 }, ['["a","b"]'], ['["a"]'], 'Own: choose at least 2', 'Own: किमान २ पर्याय निवडा'],
     ['CHECKBOXES', { type: 'max_choices', value: 1 }, ['["a"]'], ['["a","b"]'], 'Own: choose at most 1', 'Own: जास्तीत जास्त १ पर्याय निवडा'],
+    ['TEXT', { type: 'email' }, ['asha@example.in'], ['asha@', 'asha@example'], 'Own must be a valid email address', 'Own: योग्य ईमेल पत्ता टाका'],
+    [
+      'TEXT',
+      { type: 'indian_mobile' },
+      ['9876501234', '+91 98765 01234', '09876501234'],
+      ['5876501234', '98765'],
+      'Own must be a 10-digit Indian number starting 6–9',
+      'Own ६–९ ने सुरू होणारा १० अंकी भारतीय क्रमांक असावा',
+    ],
+    ['TEXT', { type: 'aadhaar' }, ['2345 6789 0124'], ['234567890123', '2345'], 'Own must be 12 digits with a valid checksum', 'Own १२ अंकी व योग्य असावा'],
+    ['NUMBER', { type: 'max_decimals', value: 2 }, ['72', '72.55'], ['72.555'], 'Own must have at most 2 decimal places', 'Own: जास्तीत जास्त २ दशांश स्थळे'],
   ];
+  /* Checked against the other answers of the form: tried in form-settings.test.ts and validation.extra.test.ts. */
+  const ACROSS = ['different_from', 'grading_scale'];
 
   it.each(CASES)('%s %o', (type, rule, right, wrong, en, mr) => {
     for (const v of right) expect([v, issue(v, own(type, rules(rule)))]).toEqual([v, undefined]);
@@ -68,10 +81,11 @@ describe('Ready-made checks and limits of an own field', () => {
   });
 
   it('every rule is tried above, in the order they are made', () => {
-    expect(new Set(CASES.map(([, r]) => r.type))).toEqual(new Set(RULE_TYPES));
+    expect(new Set([...CASES.map(([, r]) => r.type), ...ACROSS])).toEqual(new Set(RULE_TYPES));
     for (const type of ['TEXT', 'TEXTAREA', 'NUMBER', 'DATE', 'TIME', 'MONTH', 'YEAR', 'CHECKBOXES'] as FieldType[])
       expect([...rulesOf(type)].filter((t) => t !== 'not_future' && t !== 'not_past')).toEqual(RULE_TYPES.filter((t) => rulesOf(type).includes(t) && !t.startsWith('not_')));
-    for (const type of ['EMAIL', 'MOBILE', 'URL', 'DROPDOWN', 'RADIO', 'YES_NO', 'CONSENT'] as FieldType[]) expect(rulesOf(type)).toEqual([]);
+    for (const type of ['EMAIL', 'MOBILE', 'URL'] as FieldType[]) expect(rulesOf(type)).toEqual(['different_from']);
+    for (const type of ['DROPDOWN', 'RADIO', 'YES_NO', 'CONSENT'] as FieldType[]) expect(rulesOf(type)).toEqual([]);
   });
 
   it('only the first broken one is said: the type, then the rules in their own order, then the custom checks', () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, type PageMeta } from '../../api';
 import { fmtDate, Footer, Notice } from '../../components/ui';
@@ -18,6 +18,8 @@ import { addPicks, isBatch, pickBlocked, pickedDistrict, sizeFor, toPick, type B
 import CreateBatchDialog, { useBatchSize } from './CreateBatchDialog';
 import FollowUpDialog from './FollowUpDialog';
 import { ManageHeader, ManageNav } from './ManageLayout';
+import TrashSection from './TrashSection';
+import DeleteRecordDialog from './DeleteRecordDialog';
 import StudentFilters, { NO_FILTERS, type ListFilters } from './StudentFilters';
 
 const LIMIT = 25;
@@ -38,6 +40,8 @@ function FollowUpIcon() {
 /* The EDP tracking panel: every portal account and how far it got (account → OTP → step 1 → step 2 → submitted). */
 export default function ManagePage() {
   const canEdit = useCanEdit();
+  const [trash, setTrash] = useState(false);
+  const [deleting, setDeleting] = useState<Applicant | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<Applicant[]>([]);
   const [meta, setMeta] = useState<PageMeta | null>(null);
@@ -204,6 +208,11 @@ export default function ManagePage() {
       <ManageHeader />
       <main className="page" style={{ maxWidth: 1640 }}>
         <ManageNav />
+        <div className="row" style={{ marginBottom: 12 }}>
+          <button type="button" className={trash ? 'btn ghost sm' : 'btn sm'} aria-pressed={!trash} onClick={() => setTrash(false)}>Active records</button>
+          <button type="button" className={trash ? 'btn sm' : 'btn ghost sm'} aria-pressed={trash} onClick={() => setTrash(true)}>Trash</button>
+        </div>
+        {trash ? <TrashSection canEdit={canEdit} onRestored={() => void load()} /> : <>
         <div className="row" style={{ marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Student tracking</h2>
           <span className="spacer" />
@@ -457,6 +466,7 @@ export default function ManagePage() {
                         <Link className="btn ghost sm" to={`/manage/applicants/${encodeURIComponent(r.id)}`} aria-label={`View ${r.name}`}>
                           View
                         </Link>
+                        {canEdit ? <button type="button" className="btn ghost sm" aria-label={`Delete ${r.name}`} onClick={() => setDeleting(r)}>Delete</button> : null}
                         {canEdit && r.can_approve ? (
                           <button
                             type="button"
@@ -538,7 +548,9 @@ export default function ManagePage() {
           Open a student with View to see the full form, documents and approvals. Students who stopped at a step can be contacted from this
           list; record each call with the follow-up icon.
         </p>
+        </>}
       </main>
+      {deleting ? <DeleteRecordDialog applicant={deleting} onClose={() => setDeleting(null)} onDone={() => { setPicks((prev) => prev.filter((p) => p.id !== deleting.id)); setSelected((prev) => { const next = new Set(prev); next.delete(deleting.id); return next; }); setDeleting(null); setDone('Record moved to trash.'); void load(); }} /> : null}
       {following ? (
         <FollowUpDialog applicant={following} onClose={closeFollowUp} onSaved={() => void load()} readOnly={!canEdit} />
       ) : null}
@@ -578,3 +590,4 @@ export default function ManagePage() {
     </>
   );
 }
+

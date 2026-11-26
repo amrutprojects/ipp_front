@@ -1,5 +1,5 @@
 /*
- * The EDP endpoints of amrut-kalash-api (/api/v1/edp). Two separate sign-ins, each a bearer token kept in this browser:
+ * The EDP endpoints of sarthi-api (/api/v1/edp). Two separate sign-ins, each a bearer token kept in this browser:
  * the student portal and the /manage tracking panel. Neither is an Amrut admin panel session.
  */
 const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || '/api/v1';
@@ -51,6 +51,13 @@ export const onUnauthorized = (realm: Realm, fn: (() => void) | null) => {
   unauthorizedHandlers[realm] = fn;
 };
 
+/*
+ * How many changes the panel has made in this tab: kept copies of what the masters define (the form's options) are asked for
+ * again after one, so the form drawn next is the one just set up.
+ */
+let panelChanges = 0;
+export const panelChangeCount = () => panelChanges;
+
 interface Options {
   method?: string;
   body?: unknown;
@@ -96,6 +103,7 @@ export async function api<T>(path: string, opts: Options = {}): Promise<{ data: 
     }
     throw new ApiError(json?.message ?? `Request failed (${res.status})`, res.status, json?.error?.code, json?.error?.details ?? []);
   }
+  if (opts.realm === 'manage' && (opts.method ?? 'GET') !== 'GET') panelChanges++;
   return { data: json?.data as T, meta: json?.meta, message: json?.message ?? '' };
 }
 

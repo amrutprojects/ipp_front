@@ -4,6 +4,7 @@
  * not send them yet gives today's fields under today's names.
  */
 import { ddmmyyyy } from './components/ui';
+import { DEFAULT_CHECKS } from './defaultChecks';
 import { pickName, type Lang, type Pick } from './i18n';
 import {
   BASIC_FIELDS,
@@ -100,6 +101,7 @@ const TYPES: Record<string, FieldType> = {
   district_id: 'DROPDOWN',
   centre_id: 'DROPDOWN',
   disability_status: 'DROPDOWN',
+  score: 'NUMBER',
 };
 /* Asked depending on another field's answer. */
 const PARENT: Record<string, string> = {
@@ -179,6 +181,7 @@ function defaultFields(o: Options): FieldConfig[] {
     options_kind: KINDS[key] ?? null,
     help_en: null,
     help_mr: null,
+    validation: DEFAULT_CHECKS[key] ?? null,
   }));
 }
 
@@ -302,15 +305,21 @@ export function buildModel(options: Options, lang: Lang): FormModel {
     asked,
     choices,
     rules: (defs, form) =>
-      defs.filter((f) => asked(f.key, form)).map((f) => ({
-        key: f.key,
-        label: f.label,
-        required: f.required,
-        type: f.type,
-        choices: choices(f.key, form)?.map((c) => c.value) ?? null,
-        plain: f.plain,
-        validation: f.validation,
-      })),
+      defs.filter((f) => asked(f.key, form)).map((f) => {
+        /* The field its "different from" check names, when that one is asked too. */
+        const other = f.validation?.rules?.find((r) => r.type === 'different_from')?.value;
+        const theirs = typeof other === 'string' ? byKey.get(other) : undefined;
+        return {
+          key: f.key,
+          label: f.label,
+          required: f.required,
+          type: f.type,
+          choices: choices(f.key, form)?.map((c) => c.value) ?? null,
+          plain: f.plain,
+          validation: f.validation,
+          other: theirs && asked(theirs.key, form) ? { key: theirs.key, label: theirs.label } : null,
+        };
+      }),
     text,
     said: (key, message) => {
       const f = byKey.get(key);

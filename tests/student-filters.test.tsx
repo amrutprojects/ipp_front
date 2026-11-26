@@ -105,13 +105,13 @@ describe('Tracking panel filters', () => {
       'Stage of application',
       'Documents',
       'Mobile no.',
-      'Centre',
       'Final verification',
       'Clear filters',
     ]);
+    /* The Centre filter is not offered for now. */
+    expect(bar.queryByLabelText('Centre')).not.toBeInTheDocument();
     expect(texts(bar.getByLabelText('District'))).toEqual(['All districts', 'Pune', 'Satara']);
     expect(texts(bar.getByLabelText('Category'))).toEqual(['All categories', 'Maratha']);
-    expect(texts(bar.getByLabelText('Centre'))).toEqual(['All centres', 'Pune Centre']);
     expect(texts(bar.getByLabelText('Documents'))).toEqual(['All', 'Verified', 'Not verified']);
     expect(texts(bar.getByLabelText('Final verification'))).toEqual(['All', 'Verified', 'Not verified']);
     await waitFor(() =>
@@ -145,7 +145,6 @@ describe('Tracking panel filters', () => {
     await userEvent.selectOptions(bar.getByLabelText('Category'), 'Maratha');
     await userEvent.selectOptions(bar.getByLabelText('Stage of application'), 'ADMIN');
     await userEvent.selectOptions(bar.getByLabelText('Documents'), 'Verified');
-    await userEvent.selectOptions(bar.getByLabelText('Centre'), 'Pune Centre');
     await userEvent.selectOptions(bar.getByLabelText('Final verification'), 'Not verified');
     await userEvent.type(bar.getByLabelText('Name'), ' Asha ');
     await userEvent.type(bar.getByLabelText('Mobile no.'), '90000');
@@ -160,7 +159,6 @@ describe('Tracking panel filters', () => {
           application_stage: 'ADMIN',
           documents: 'VERIFIED',
           mobile: '90000',
-          centre_id: CENTRE,
           final: 'NOT_VERIFIED',
           follow_up: 'NONE',
           search: 'IPP-000001',
@@ -284,7 +282,7 @@ describe('Tracking panel filters', () => {
     await userEvent.click(bar.getByRole('button', { name: 'Clear filters' }));
     await waitFor(() => expect(sent(lists)).toEqual({}));
     expect(lists[lists.length - 1]!.get('page')).toBe('1');
-    for (const label of ['Name', 'District', 'Category', 'Stage of application', 'Documents', 'Mobile no.', 'Centre', 'Final verification'])
+    for (const label of ['Name', 'District', 'Category', 'Stage of application', 'Documents', 'Mobile no.', 'Final verification'])
       expect(bar.getByLabelText(label)).toHaveValue('');
     expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
     expect(screen.getByRole('combobox', { name: 'Filter by follow-up' })).toHaveValue('');

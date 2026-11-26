@@ -1,6 +1,7 @@
 /*
- * Client-side checks matching the API's rules (amrut-kalash-api registration.validation.ts and edp.validation.ts), so
- * most mistakes are shown before anything is sent. The server checks everything again.
+ * Client-side checks matching the API's rules, so most mistakes are shown before anything is sent; the server checks
+ * everything again. A field of the form is checked by its type, its choices and its checks in Masters → Form fields only:
+ * nothing of it is fixed here. The account pages (sign-up, sign-in) have their own checks.
  */
 import type { CustomCheck, DocumentKind, FieldType, FieldValidation, Form, FormField, RuleType, ValidationRule } from './types';
 
@@ -56,15 +57,22 @@ export function nameIssue(label: string, v: string, max: number, required = true
     return T(`${labelMr}: फक्त अक्षरे, स्पेस आणि . ' - ही चिन्हे वापरता येतात`, `${label} may contain only letters, spaces and . ' -`);
   return null;
 }
-export function emailIssue(v: string, T: Pick = EN): string | null {
-  if (!v.trim()) return T('ईमेल आवश्यक आहे', 'Email is required');
-  return EMAIL_RE.test(v.trim()) ? null : T('योग्य ईमेल पत्ता टाका', 'Enter a valid email address');
+/*
+ * The checks below name the field by `label`: on the form its current label (Masters → Form fields), already in the screen's
+ * language; on the account pages the portal's own name.
+ */
+export function emailIssue(v: string, T: Pick = EN, label?: string): string | null {
+  if (!v.trim()) return label ? T(`${label} आवश्यक आहे`, `${label} is required`) : T('ईमेल आवश्यक आहे', 'Email is required');
+  if (EMAIL_RE.test(v.trim())) return null;
+  return label
+    ? T(`${label}: योग्य ईमेल पत्ता टाका`, `${label} must be a valid email address`)
+    : T('योग्य ईमेल पत्ता टाका', 'Enter a valid email address');
 }
-export function mobileIssue(v: string, T: Pick = EN): string | null {
-  if (!v.trim()) return T('मोबाईल क्रमांक आवश्यक आहे', 'Mobile number is required');
+export function mobileIssue(v: string, T: Pick = EN, label = T('मोबाईल क्रमांक', 'Mobile number')): string | null {
+  if (!v.trim()) return T(`${label} आवश्यक आहे`, `${label} is required`);
   return /^[6-9]\d{9}$/.test(normaliseMobile(v))
     ? null
-    : T('मोबाईल क्रमांक ६–९ ने सुरू होणारा १० अंकी भारतीय क्रमांक असावा', 'Mobile number must be a 10-digit Indian number starting 6–9');
+    : T(`${label} ६–९ ने सुरू होणारा १० अंकी भारतीय क्रमांक असावा`, `${label} must be a 10-digit Indian number starting 6–9`);
 }
 export function passwordIssue(v: string, T: Pick = EN): string | null {
   if (!v) return T('पासवर्ड आवश्यक आहे', 'Password is required');
@@ -74,23 +82,14 @@ export function passwordIssue(v: string, T: Pick = EN): string | null {
   if (!/[0-9]/.test(v)) return T('पासवर्डमध्ये किमान एक अंक (0–9) असावा', 'Password must contain a digit');
   return null;
 }
-export function aadhaarIssue(v: string, T: Pick = EN): string | null {
+export function aadhaarIssue(v: string, T: Pick = EN, label = T('आधार क्रमांक', 'Aadhaar number')): string | null {
   const d = v.replace(/[\s-]/g, '');
-  if (!d) return T('आधार क्रमांक आवश्यक आहे', 'Aadhaar number is required');
+  if (!d) return T(`${label} आवश्यक आहे`, `${label} is required`);
   return /^[2-9]\d{11}$/.test(d) && verhoeffValid(d)
     ? null
-    : T('आधार क्रमांक १२ अंकी व योग्य असावा', 'Aadhaar number must be 12 digits with a valid checksum');
+    : T(`${label} १२ अंकी व योग्य असावा`, `${label} must be 12 digits with a valid checksum`);
 }
-export function dobIssue(v: string, today = new Date(), T: Pick = EN): string | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-  if (!m) return T('जन्मतारीख आवश्यक आहे', 'Date of birth is required');
-  const d = new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!));
-  if (d.getUTCMonth() !== +m[2]! - 1) return T('जन्मतारीख योग्य नाही', 'Date of birth is not a real date');
-  if (d > today) return T('जन्मतारीख भविष्यातील असू शकत नाही', 'Date of birth cannot be in the future');
-  const age =
-    today.getUTCFullYear() - d.getUTCFullYear() - (today < new Date(Date.UTC(today.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())) ? 1 : 0);
-  return age < 14 || age > 100 ? T('अर्जदाराचे वय १४ ते १०० वर्षे असावे', 'Applicant must be between 14 and 100 years old') : null;
-}
+
 
 /*
  * The fields' names when the API does not send the Form fields master (GET /edp/options → fields); otherwise its labels
@@ -141,13 +140,10 @@ export const isCgpa = (form: Form) => form.grading_type === 'CGPA';
 
 /* Today as YYYY-MM-DD in this browser's time zone. */
 export const localToday = (now = new Date()) => new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+/* Whole years from the day to today (both YYYY-MM-DD). */
+export const ageOn = (day: string, today: string) =>
+  Number(today.slice(0, 4)) - Number(day.slice(0, 4)) - (today.slice(5) < day.slice(5) ? 1 : 0);
 
-export function pinCodeIssue(v: string, T: Pick = EN): string | null {
-  if (!v.trim()) return T('पिन कोड आवश्यक आहे', 'PIN code is required');
-  return /^[1-9]\d{5}$/.test(v.trim())
-    ? null
-    : T('पिन कोड ६ अंकी असावा व ० ने सुरू होऊ नये', 'PIN code must be 6 digits and cannot start with 0');
-}
 /* A YYYY-MM-DD that is a real day of the calendar. */
 export const realDate = (v: string) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
@@ -155,27 +151,6 @@ export const realDate = (v: string) => {
   const d = new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!));
   return d.getUTCMonth() === +m[2]! - 1 && d.getUTCDate() === +m[3]!;
 };
-export function completedOnIssue(v: string, today = localToday(), T: Pick = EN): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return T('पात्रता पूर्ण झाल्याची तारीख आवश्यक आहे', 'Qualification completion date is required');
-  if (!realDate(v)) return T('पात्रता पूर्ण झाल्याची तारीख योग्य नाही', 'Qualification completion date is not a real date');
-  return v > today
-    ? T('पात्रता पूर्ण झाल्याची तारीख भविष्यातील असू शकत नाही', 'Qualification completion date cannot be in the future')
-    : null;
-}
-export function scoreIssue(v: string, gradingType: string, cgpaScale: string, T: Pick = EN): string | null {
-  const t = v.trim();
-  if (!t) return T('गुण आवश्यक आहेत', 'Score is required');
-  if (!/^\d+(\.\d{1,2})?$/.test(t))
-    return T('गुण ही जास्तीत जास्त २ दशांश स्थळे असलेली संख्या असावी', 'Score must be a number with at most 2 decimal places');
-  const n = Number(t);
-  if (gradingType === 'CGPA') {
-    const scale = Number(cgpaScale);
-    if (!scale) return null; /* the scale itself is reported missing */
-    return n > scale ? T(`CGPA ० ते ${mrNum(scale)} या दरम्यान असावा`, `CGPA must be between 0 and ${scale}`) : null;
-  }
-  if (gradingType === 'PERCENTAGE') return n > 100 ? T('टक्केवारी ० ते १०० या दरम्यान असावी', 'Percentage must be between 0 and 100') : null;
-  return null;
-}
 
 /* A field to check, as the masters define it: its current label, whether it must be filled, and its choices (dropdowns). */
 export interface FieldRule {
@@ -185,17 +160,19 @@ export interface FieldRule {
   type: FieldType;
   /* The values that can be chosen; null = not a dropdown, or its list is not known. */
   choices: readonly string[] | null;
-  /* Checked by its type alone, not by the portal's own format for its key. */
+  /* Drawn by its type alone: an own field, or one of the program's given another type. */
   plain?: boolean;
   /* The field's checks (Masters → Form fields). */
   validation?: FieldValidation | null;
+  /* The field its "different from" check names, when that one is asked: its key and its label. */
+  other?: { key: string; label: string } | null;
 }
 interface RuleContext {
   form: Form;
   T: Pick;
   today?: string;
 }
-/* Longest values of the own fields (amrut-kalash-api CUSTOM_VALUE_MAX). */
+/* Longest values of the own fields (sarthi-api CUSTOM_VALUE_MAX). */
 export const OWN_TEXT_MAX = 250;
 export const OWN_TEXTAREA_MAX = 2000;
 
@@ -205,47 +182,6 @@ const max =
     v.length > n ? T(`${f.label}: जास्तीत जास्त ${mrNum(n)} वर्ण`, `${f.label} must be at most ${n} characters`) : null;
 type Check = (v: string, f: FieldRule, ctx: RuleContext) => string | null;
 
-/* What a filled value must look like, beyond being one of the field's choices. */
-const FORMAT: Partial<Record<string, Check>> = {
-  first_name: (v, f, { T }) => nameIssue(f.label, v, 100, true, T),
-  last_name: (v, f, { T }) => nameIssue(f.label, v, 100, true, T),
-  father_name: (v, f, { T }) => nameIssue(f.label, v, 150, true, T),
-  mother_name: (v, f, { T }) => nameIssue(f.label, v, 150, true, T),
-  email: (v, _f, { T }) => emailIssue(v, T),
-  date_of_birth: (v, _f, { T }) => dobIssue(v, new Date(), T),
-  current_address: max(500),
-  aadhaar_number: (v, _f, { T }) => aadhaarIssue(v, T),
-  mobile_number: (v, _f, { T }) => mobileIssue(v, T),
-  permanent_address: max(500),
-  landmark: max(150),
-  taluka: max(100),
-  pin_code: (v, _f, { T }) => pinCodeIssue(v, T),
-  alternate_mobile_number: (v, f, { form, T }) => {
-    const alt = normaliseMobile(v);
-    if (!/^[6-9]\d{9}$/.test(alt))
-      return T(`${f.label} ६–९ ने सुरू होणारा १० अंकी भारतीय क्रमांक असावा`, `${f.label} must be a 10-digit Indian number starting 6–9`);
-    return alt === normaliseMobile(form.mobile_number ?? '')
-      ? T(`${f.label} मोबाईल क्रमांकापेक्षा वेगळा असावा`, `${f.label} must be different from the mobile number`)
-      : null;
-  },
-  alternate_email: (v, f, { form, T }) => {
-    if (v.length > 254 || !EMAIL_RE.test(v)) return T('योग्य ईमेल पत्ता टाका', 'Enter a valid email address');
-    return v.toLowerCase() === (form.email ?? '').trim().toLowerCase()
-      ? T(`${f.label} खात्याच्या ईमेलपेक्षा वेगळा असावा`, `${f.label} must be different from your account email`)
-      : null;
-  },
-  disability_status: (v, f, { T }) => (v === 'Yes' || v === 'No' ? null : T(`${f.label}: होय किंवा नाही निवडा`, `${f.label}: select Yes or No`)),
-  disability_type: max(100),
-  disability_certificate_number: (v, f, { T }) =>
-    /^[A-Za-z0-9/-]{4,50}$/.test(v)
-      ? null
-      : T(`${f.label}: ४–५० वर्ण, फक्त इंग्रजी अक्षरे, अंक, / आणि -`, `${f.label} must be 4–50 characters: letters, digits, / and - only`),
-  qualification_name: max(150),
-  qualification_stream: max(150),
-  qualification_board: max(200),
-  qualification_completed_on: (v, _f, { today, T }) => completedOnIssue(v, today, T),
-  score: (v, _f, { form, T }) => scoreIssue(v, form.grading_type ?? '', form.cgpa_scale ?? '', T),
-};
 /* The values chosen in a Checkboxes answer (a JSON array, '' = none); null = it is not one. */
 export function chosen(v: string): string[] | null {
   if (!v.trim()) return [];
@@ -302,9 +238,27 @@ const NOT_ONE_CHOICE = new Set<FieldType>(['CHECKBOXES', 'YES_NO', 'CONSENT']);
 
 /* The rules that fit a type of field, in the order they are checked. */
 const RULES_BY_TYPE: Partial<Record<FieldType, readonly RuleType[]>> = {
-  TEXT: ['letters', 'digits', 'letters_digits', 'no_spaces', 'uppercase', 'pin_code', 'pan', 'ifsc', 'min_length', 'max_length'],
-  TEXTAREA: ['letters', 'letters_digits', 'uppercase', 'min_length', 'max_length'],
-  NUMBER: ['whole_number', 'min_digits', 'max_digits', 'min_value', 'max_value'],
+  TEXT: [
+    'letters',
+    'digits',
+    'letters_digits',
+    'no_spaces',
+    'uppercase',
+    'pin_code',
+    'pan',
+    'ifsc',
+    'email',
+    'indian_mobile',
+    'aadhaar',
+    'min_length',
+    'max_length',
+    'different_from',
+  ],
+  TEXTAREA: ['letters', 'letters_digits', 'uppercase', 'min_length', 'max_length', 'different_from'],
+  EMAIL: ['different_from'],
+  MOBILE: ['different_from'],
+  URL: ['different_from'],
+  NUMBER: ['whole_number', 'min_digits', 'max_digits', 'max_decimals', 'min_value', 'max_value', 'different_from', 'grading_scale'],
   DATE: ['not_future', 'not_past', 'min_date', 'max_date', 'min_age', 'max_age'],
   TIME: ['min_time', 'max_time'],
   MONTH: ['not_future', 'not_past'],
@@ -313,13 +267,21 @@ const RULES_BY_TYPE: Partial<Record<FieldType, readonly RuleType[]>> = {
 };
 /* None of the others: the type itself, or its choices, are checked. */
 export const rulesOf = (type: FieldType): readonly RuleType[] => RULES_BY_TYPE[type] ?? [];
-/* What a rule's limit is; null = the rule has none. */
-export const limitOf = (type: RuleType): 'number' | 'date' | 'time' | null =>
-  /^m(in|ax)_date$/.test(type) ? 'date' : /^m(in|ax)_time$/.test(type) ? 'time' : /^m(in|ax)_/.test(type) ? 'number' : null;
+/* What a rule's limit is (field = another field of the form, by its key); null = the rule has none. */
+export const limitOf = (type: RuleType): 'number' | 'date' | 'time' | 'field' | null =>
+  type === 'different_from'
+    ? 'field'
+    : /^m(in|ax)_date$/.test(type)
+      ? 'date'
+      : /^m(in|ax)_time$/.test(type)
+        ? 'time'
+        : /^m(in|ax)_/.test(type)
+          ? 'number'
+          : null;
+/* Checked against the other answers of the form, after the field's own checks. */
+const ACROSS: readonly RuleType[] = ['different_from', 'grading_scale'];
 
 const digitsIn = (v: string) => v.replace(/\D/g, '').length;
-/* Whole years from the day to today. */
-const ageOn = (day: string, today: string) => Number(today.slice(0, 4)) - Number(day.slice(0, 4)) - (today.slice(5) < day.slice(5) ? 1 : 0);
 
 /*
  * Each rule: whether an answer keeps it (n, or at = a day or a time, is its limit), and what is said when it does not, in
@@ -401,6 +363,31 @@ const RULES: Record<RuleType, RuleDef> = {
     ok: (v, n) => (chosen(v)?.length ?? 0) <= n,
     says: (l, mr, en) => [`${l}: जास्तीत जास्त ${mr} पर्याय निवडा`, `${l}: choose at most ${en}`],
   },
+  email: {
+    ok: (v) => v.length <= 254 && EMAIL_RE.test(v),
+    says: (l) => [`${l}: योग्य ईमेल पत्ता टाका`, `${l} must be a valid email address`],
+  },
+  /* +91, a 0 and spaces in front are allowed. */
+  indian_mobile: {
+    ok: (v) => /^[6-9]\d{9}$/.test(normaliseMobile(v)),
+    says: (l) => [`${l} ६–९ ने सुरू होणारा १० अंकी भारतीय क्रमांक असावा`, `${l} must be a 10-digit Indian number starting 6–9`],
+  },
+  /* Spaces and hyphens between the digits are allowed. */
+  aadhaar: {
+    ok: (v) => {
+      const d = v.replace(/[\s-]/g, '');
+      return /^[2-9]\d{11}$/.test(d) && verhoeffValid(d);
+    },
+    says: (l) => [`${l} १२ अंकी व योग्य असावा`, `${l} must be 12 digits with a valid checksum`],
+  },
+  max_decimals: {
+    ok: (v, n) => (v.split('.')[1]?.length ?? 0) <= n,
+    says: (l, mr, en) =>
+      en === '0' ? [`${l}: पूर्णांक टाका`, `${l} must be a whole number`] : [`${l}: जास्तीत जास्त ${mr} दशांश स्थळे`, `${l} must have at most ${en} decimal places`],
+  },
+  /* Across fields (checkFields): their messages are made there. */
+  different_from: { ok: () => true, says: (l) => [l, l] },
+  grading_scale: { ok: () => true, says: (l) => [l, l] },
 };
 /* A rule that can be checked: one this portal knows, with its limit when it needs one. */
 const usable = (r: ValidationRule) => {
@@ -408,6 +395,7 @@ const usable = (r: ValidationRule) => {
   const limit = limitOf(r.type);
   if (limit === 'number') return typeof r.value === 'number';
   if (limit === null) return true;
+  if (limit === 'field') return typeof r.value === 'string' && r.value !== '';
   return typeof r.value === 'string' && (limit === 'date' ? realDate(r.value) : TIME_RE.test(r.value));
 };
 function ruleMessage(r: ValidationRule, label: string, T: Pick): string {
@@ -444,6 +432,7 @@ export function regexIssue(source: string, flags: string): string {
  * JavaScript function is never run here: the server runs it when the step is saved. */
 const brokenCheck: Check = (v, f, { T, today = localToday() }) => {
   for (const type of rulesOf(f.type)) {
+    if (ACROSS.includes(type)) continue;
     const r = f.validation?.rules?.find((x) => x.type === type);
     if (r && usable(r) && !RULES[type].ok(v, Number(r.value ?? 0), today, String(r.value ?? ''))) return ruleMessage(r, f.label, T);
   }
@@ -467,6 +456,71 @@ export function isAsked(key: string, form: Form): boolean {
   return key !== 'cgpa_scale' || isCgpa(form);
 }
 
+/* The day `years` years before `day` (29 February → 28 February in a common year). */
+function yearsBefore(day: string, years: number): Date {
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  const last = new Date(Date.UTC(y - years, m, 0)).getUTCDate();
+  return new Date(Date.UTC(y - years, m - 1, Math.min(d, last)));
+}
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+/*
+ * The days a date field's calendar offers, by its rules: not in the future or the past, from / until a day, and the ages
+ * (youngest: born on or before today that many years ago; oldest: born after today one year more ago). Undefined = no limit.
+ * A day typed outside them is still checked and named by the rule it breaks.
+ */
+export function dateLimits(rules: readonly ValidationRule[], today = localToday()): { min?: string; max?: string } {
+  let min: string | undefined;
+  let max: string | undefined;
+  const from = (d: string) => void (min = !min || d > min ? d : min);
+  const until = (d: string) => void (max = !max || d < max ? d : max);
+  for (const r of rules) {
+    if (!usable(r)) continue;
+    if (r.type === 'not_future') until(today);
+    else if (r.type === 'not_past') from(today);
+    else if (r.type === 'min_date') from(String(r.value));
+    else if (r.type === 'max_date') until(String(r.value));
+    else if (r.type === 'min_age') until(iso(yearsBefore(today, Number(r.value))));
+    else if (r.type === 'max_age') {
+      const day = yearsBefore(today, Number(r.value) + 1);
+      day.setUTCDate(day.getUTCDate() + 1);
+      from(iso(day));
+    }
+  }
+  return { min, max };
+}
+
+/* What a field's own checks are made on, as on the server: of the Aadhaar number its digits, of a mobile number the number itself. */
+const MOBILE_FIELDS: readonly string[] = ['mobile_number', 'alternate_mobile_number'];
+const ownChecked = (f: FieldRule, v: string) =>
+  f.plain ? v : f.key === 'aadhaar_number' ? v.replace(/[\s-]/g, '') : MOBILE_FIELDS.includes(f.key) ? normaliseMobile(v) : v;
+
+const has = (f: FieldRule, type: RuleType) => !!f.validation?.rules?.some((r) => r.type === type && usable(r));
+const isMobile = (key: string, fields: readonly FieldRule[]) =>
+  MOBILE_FIELDS.includes(key) || fields.find((x) => x.key === key)?.type === 'MOBILE';
+
+/* The checks across fields a field has (Masters → Form fields), of an answer that is right on its own. */
+function acrossIssue(v: string, f: FieldRule, fields: readonly FieldRule[], { form, T }: RuleContext): string | null {
+  const other = f.other;
+  if (other && has(f, 'different_from')) {
+    const theirs = (form[other.key] ?? '').trim();
+    const mobile = isMobile(f.key, fields) || isMobile(other.key, fields);
+    if (theirs && (mobile ? normaliseMobile(v) === normaliseMobile(theirs) : v.toLowerCase() === theirs.toLowerCase()))
+      return T(`${f.label} हा ${other.label} पेक्षा वेगळा असावा`, `${f.label} must be different from ${other.label}`);
+  }
+  if (has(f, 'grading_scale') && f.type === 'NUMBER') {
+    const n = Number(v);
+    if (form.grading_type === 'CGPA') {
+      const scale = Number(form.cgpa_scale);
+      /* Without a scale: the server knows the largest one; a missing one is reported on its own. */
+      if (scale && n > scale) return T(`CGPA ० ते ${mrNum(scale)} या दरम्यान असावा`, `CGPA must be between 0 and ${scale}`);
+    } else if (n > 100)
+      return form.grading_type === 'PERCENTAGE'
+        ? T('टक्केवारी ० ते १०० या दरम्यान असावी', 'Percentage must be between 0 and 100')
+        : T(`${f.label} ० ते १०० या दरम्यान असावे`, `${f.label} must be between 0 and 100`);
+  }
+  return null;
+}
+
 export function checkFields(form: Form, fields: readonly FieldRule[], ctx: { T?: Pick; today?: string } = {}): Record<string, string> {
   const errors: Record<string, string> = {};
   const c: RuleContext = { form, T: ctx.T ?? EN, today: ctx.today };
@@ -477,17 +531,16 @@ export function checkFields(form: Form, fields: readonly FieldRule[], ctx: { T?:
     if (!v || (f.type === 'CHECKBOXES' && chosen(v)?.length === 0)) {
       if (!f.required) continue;
       issue =
-        f.key === 'disability_status'
-          ? FORMAT.disability_status!(v, f, c)
-          : f.type === 'CONSENT'
-            ? notTicked(f.label, c.T)
+        f.type === 'CONSENT'
+          ? notTicked(f.label, c.T)
+          : f.key === 'disability_status'
+            ? c.T(`${f.label}: होय किंवा नाही निवडा`, `${f.label}: select Yes or No`)
             : c.T(`${f.label} आवश्यक आहे`, `${f.label} is required`);
     } else if (f.choices?.length && !NOT_ONE_CHOICE.has(f.type) && !f.choices.includes(v)) {
       issue = c.T(`${f.label}: यादीतील पर्याय निवडा`, `Select a valid ${f.label}`);
     } else {
-      const format = (f.plain ? undefined : FORMAT[f.key]) ?? OWN[f.type];
-      /* Of the Aadhaar number its digits are checked, as on the server. */
-      issue = format?.(v, f, c) ?? brokenCheck(f.key === 'aadhaar_number' ? v.replace(/[\s-]/g, '') : v, f, c);
+      /* Its type, then its checks, then the checks across fields. */
+      issue = OWN[f.type]?.(v, f, c) ?? brokenCheck(ownChecked(f, v), f, c) ?? acrossIssue(v, f, fields, c);
     }
     if (issue) errors[f.key] = issue;
   }

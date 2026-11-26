@@ -1,10 +1,11 @@
-import { aadhaarIssue, checkFields, dobIssue, FIELD_LABELS, mobileIssue, nameIssue, passwordIssue, verhoeffValid, type FieldRule } from '../src/validation';
+import { aadhaarIssue, checkFields, FIELD_LABELS, mobileIssue, nameIssue, passwordIssue, verhoeffValid, type FieldRule } from '../src/validation';
+import { DEFAULT_CHECKS } from './defaultChecks';
 import type { Form, FormField } from '../src/types';
 
 /* A required field under its usual name. */
 const rule = (key: FormField): FieldRule => ({ key, label: FIELD_LABELS[key], required: true, type: 'TEXT', choices: null });
 
-/* Same Verhoeff digit as amrut-kalash-api withVerhoeffDigit. */
+/* Same Verhoeff digit as sarthi-api withVerhoeffDigit. */
 function withCheck(base: string): string {
   for (let d = 0; d <= 9; d++) if (verhoeffValid(base + d)) return base + d;
   throw new Error('no digit');
@@ -36,11 +37,18 @@ describe('client-side rules match the API', () => {
     expect(nameIssue('First name', 'Kavya', 100)).toBeNull();
     expect(nameIssue('First name', 'K4vya', 100)).toMatch(/only letters/);
     expect(nameIssue('Middle name', '', 100, false)).toBeNull();
-    const today = new Date(Date.UTC(2026, 9, 24));
-    expect(dobIssue('2002-06-01', today)).toBeNull();
-    expect(dobIssue('2020-01-01', today)).toMatch(/between 14 and 100/);
-    expect(dobIssue('2027-01-01', today)).toMatch(/future/);
-    expect(dobIssue('2002-02-30', today)).toMatch(/real date/);
+    /* The date of birth by the checks it starts with (Masters → Form fields). */
+    const dob = (v: string) =>
+      checkFields(
+        { date_of_birth: v } as unknown as Form,
+        [{ ...rule('date_of_birth'), type: 'DATE', validation: DEFAULT_CHECKS.date_of_birth }],
+        { today: '2026-10-24' },
+      ).date_of_birth;
+    expect(dob('2002-06-01')).toBeUndefined();
+    expect(dob('2020-01-01')).toBe('Date of Birth: age must be at least 14 years');
+    expect(dob('1925-01-01')).toBe('Date of Birth: age must be at most 100 years');
+    expect(dob('2027-01-01')).toMatch(/future/);
+    expect(dob('2002-02-30')).toMatch(/real date/);
   });
 
   it('checkFields reports every missing field of a step', () => {

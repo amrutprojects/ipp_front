@@ -1,20 +1,15 @@
-import {
-  centreIssues,
-  checkFields,
-  completedOnIssue,
-  FIELD_LABELS,
-  pinCodeIssue,
-  scoreIssue,
-  type FieldRule,
-} from '../src/validation';
+import { centreIssues, checkFields, FIELD_LABELS, type FieldRule } from '../src/validation';
 import type { Form, FormField } from '../src/types';
+import { DEFAULT_CHECKS } from './defaultChecks';
 
+/* A field of the program under its usual name, with the checks it starts with (Masters → Form fields). */
 const rule = (key: FormField, over: Partial<FieldRule> = {}): FieldRule => ({
   key,
   label: FIELD_LABELS[key],
   required: true,
   type: 'TEXT',
   choices: null,
+  validation: DEFAULT_CHECKS[key] ?? null,
   ...over,
 });
 
@@ -32,15 +27,21 @@ const base = {
 } as unknown as Form;
 
 describe('new registration fields', () => {
-  it('PIN code: exactly 6 digits, not starting with 0', () => {
-    expect(pinCodeIssue('411038')).toBeNull();
-    expect(pinCodeIssue('')).toBe('PIN code is required');
-    expect(pinCodeIssue('011038')).toMatch(/cannot start with 0/);
-    expect(pinCodeIssue('41103')).toMatch(/6 digits/);
+  it('PIN code: exactly 6 digits, not starting with 0 (its check pin_code)', () => {
+    const pin = (v: string) => checkFields({ ...base, pin_code: v } as Form, [rule('pin_code')]).pin_code;
+    expect(pin('411038')).toBeUndefined();
+    expect(pin('')).toBe('PIN Code is required');
+    expect(pin('011038')).toBe('PIN Code must be exactly 6 digits');
+    expect(pin('41103')).toBe('PIN Code must be exactly 6 digits');
+    /* Its check taken away: any text. */
+    expect(checkFields({ ...base, pin_code: '0' } as Form, [rule('pin_code', { validation: null })])).toEqual({});
   });
 
   it('alternate mobile and email are optional, but valid and different when given', () => {
-    const f = [rule('alternate_mobile_number', { required: false }), rule('alternate_email', { required: false })];
+    const f = [
+      rule('alternate_mobile_number', { required: false, other: { key: 'mobile_number', label: 'Mobile Number' } }),
+      rule('alternate_email', { required: false, other: { key: 'email', label: 'Email' } }),
+    ];
     expect(checkFields(base, f)).toEqual({});
     expect(checkFields({ ...base, alternate_mobile_number: '9765412345' }, f).alternate_mobile_number).toMatch(/different/);
     expect(checkFields({ ...base, alternate_mobile_number: '+91 98220 12345' }, f)).toEqual({});
@@ -63,22 +64,32 @@ describe('new registration fields', () => {
     expect(checkFields({ ...base, disability_status: '' }, f).disability_status).toMatch(/Yes or No/);
   });
 
-  it('score: percentage 0–100, CGPA up to its scale, 2 decimals at most', () => {
-    expect(scoreIssue('100', 'PERCENTAGE', '')).toBeNull();
-    expect(scoreIssue('100.01', 'PERCENTAGE', '')).toMatch(/between 0 and 100/);
-    expect(scoreIssue('72.555', 'PERCENTAGE', '')).toMatch(/2 decimal/);
-    expect(scoreIssue('9.5', 'CGPA', '10')).toBeNull();
-    expect(scoreIssue('4.5', 'CGPA', '4')).toMatch(/between 0 and 4/);
+  it('score: percentage 0–100, CGPA up to its scale, 2 decimals at most (its checks)', () => {
+    const score = (v: string, grading_type: string, cgpa_scale = '') =>
+      checkFields({ ...base, score: v, grading_type, cgpa_scale } as Form, [rule('score', { type: 'NUMBER' })]).score;
+    expect(score('100', 'PERCENTAGE')).toBeUndefined();
+    expect(score('100.01', 'PERCENTAGE')).toBe('Percentage must be between 0 and 100');
+    expect(score('72.555', 'PERCENTAGE')).toBe('Score must have at most 2 decimal places');
+    expect(score('9.5', 'CGPA', '10')).toBeUndefined();
+    expect(score('4.5', 'CGPA', '4')).toBe('CGPA must be between 0 and 4');
+    expect(score('-1', 'PERCENTAGE')).toBe('Score must be at least 0');
+    /* Without "within its grading": any number. */
+    expect(checkFields({ ...base, score: '250' } as Form, [rule('score', { type: 'NUMBER', validation: null })])).toEqual({});
     expect(checkFields({ ...base, grading_type: 'CGPA', cgpa_scale: '' }, [rule('cgpa_scale')]).cgpa_scale).toBe('CGPA Scale is required');
     expect(checkFields(base, [rule('cgpa_scale')])).toEqual({});
   });
 
-  it('completion date: a real date, not in the future', () => {
-    expect(completedOnIssue('2023-05-31', '2026-10-28')).toBeNull();
-    expect(completedOnIssue('2026-10-28', '2026-10-28')).toBeNull();
-    expect(completedOnIssue('2026-10-29', '2026-10-28')).toMatch(/future/);
-    expect(completedOnIssue('2023-02-30', '2026-10-28')).toMatch(/real date/);
-    expect(completedOnIssue('', '2026-10-28')).toMatch(/required/);
+  it('completion date: a real date, not in the future (its checks)', () => {
+    const done = (v: string) =>
+      checkFields({ ...base, qualification_completed_on: v } as Form, [rule('qualification_completed_on', { type: 'DATE' })], {
+        today: '2026-10-28',
+      }).qualification_completed_on;
+    expect(done('2023-05-31')).toBeUndefined();
+    expect(done('2026-10-28')).toBeUndefined();
+    expect(done('2026-10-29')).toMatch(/future/);
+    expect(done('2023-02-30')).toMatch(/real date/);
+    expect(done('')).toMatch(/required/);
+    expect(done('1939-12-31')).toBe('Qualification Completed On must be on or after 31/12/1939'.replace('31/12/1939', '01/01/1940'));
   });
 
   it('a dropdown value must be one of its choices, under the current name of the field', () => {

@@ -152,9 +152,13 @@ describe('Users (tracking panel, admins only)', () => {
     expect(asha).toHaveTextContent('Viewer');
     expect(asha).toHaveTextContent('Active');
     expect(within(asha).getByRole('button', { name: 'Deactivate Asha Patil' })).toBeInTheDocument();
+    expect(within(asha).getByRole('button', { name: 'View Asha Patil' })).toBeInTheDocument();
+    expect(within(asha).getByRole('button', { name: 'Edit Asha Patil' })).toBeInTheDocument();
+    expect(within(asha).getByRole('button', { name: 'Delete Asha Patil' })).toBeInTheDocument();
     const me = screen.getByRole('row', { name: /Program Admin/ });
     expect(me).toHaveTextContent('Admin');
-    expect(within(me).queryByRole('button')).not.toBeInTheDocument();
+    /* One's own account: viewed and edited, never deactivated or deleted. */
+    expect(within(me).getAllByRole('button').map((b) => b.textContent)).toEqual(['View', 'Edit']);
     expect(screen.queryByText('View only')).not.toBeInTheDocument();
   });
 

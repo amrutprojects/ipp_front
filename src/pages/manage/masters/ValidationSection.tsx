@@ -73,7 +73,13 @@ const TYPE_NOTE: Partial<Record<FieldType, string>> = {
   CONSENT: 'When it is required, the box must be ticked.',
 };
 
-function Limits({ v, type }: { v: Validation; type: FieldType }) {
+/* Another field of the form, to name in a check ("different from"). */
+export interface OtherField {
+  key: string;
+  label: string;
+}
+
+function Limits({ v, type, fields }: { v: Validation; type: FieldType; fields: readonly OtherField[] }) {
   const limits = LIMITS[type];
   if (!limits) return null;
   return (
@@ -82,6 +88,29 @@ function Limits({ v, type }: { v: Validation; type: FieldType }) {
       <div className="grid">
         {limits.map(([t, label]) => {
           const kind = limitOf(t);
+          const set = (text: string) => v.change((d) => ({ ...d, limits: { ...d.limits, [t]: text } }), `rule.${t}`, `rule.${t.replace(/^min/, 'max')}`);
+          if (kind === 'field') {
+            const chosen = v.draft.limits[t] ?? '';
+            return (
+              <Field key={t} id={`val-${t}`} label={label} required={false} error={v.issues[`rule.${t}`]}>
+                <select
+                  id={`val-${t}`}
+                  className="inp"
+                  value={chosen}
+                  onChange={(e) => set(e.target.value)}
+                  aria-invalid={!!v.issues[`rule.${t}`] || undefined}
+                >
+                  <option value="">No other field</option>
+                  {chosen && !fields.some((f) => f.key === chosen) ? <option value={chosen}>{chosen} (not in the form)</option> : null}
+                  {fields.map((f) => (
+                    <option key={f.key} value={f.key}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            );
+          }
           return (
             <Field key={t} id={`val-${t}`} label={label} required={false} error={v.issues[`rule.${t}`]}>
               <input
@@ -101,7 +130,7 @@ function Limits({ v, type }: { v: Validation; type: FieldType }) {
           );
         })}
       </div>
-      <span className="hint">Left empty: no limit.</span>
+      <span className="hint">Left empty: no limit. A field of the program starts with the checks it always had: change or clear them here.</span>
     </fieldset>
   );
 }
@@ -359,12 +388,23 @@ function TryIt({ v, type, label }: { v: Validation; type: FieldType; label: stri
 }
 
 /* The validation of a field: limits, ready-made checks, custom checks, and a place to try an answer. */
-export default function ValidationSection({ v, type, label }: { v: Validation; type: FieldType; label: string }) {
+export default function ValidationSection({
+  v,
+  type,
+  label,
+  fields = [],
+}: {
+  v: Validation;
+  type: FieldType;
+  label: string;
+  /* The other fields of the form ("different from"). */
+  fields?: readonly OtherField[];
+}) {
   return (
     <section className="val" aria-labelledby="val-title" ref={v.box}>
       <h4 id="val-title">Validation</h4>
       {TYPE_NOTE[type] ? <p className="hint">{TYPE_NOTE[type]} Custom checks can be added.</p> : null}
-      <Limits v={v} type={type} />
+      <Limits v={v} type={type} fields={fields} />
       <Checks v={v} type={type} />
       {v.issues.rules ? (
         <span className="err" role="alert">

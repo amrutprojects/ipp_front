@@ -4,7 +4,7 @@ import { Field, Notice } from '../../../components/ui';
 import { useCanEdit } from '../../../session';
 import type { DocumentKind, MasterDocument } from '../../../types';
 import { MastersShell } from '../ManageLayout';
-import { ConfirmDelete, FormDialog, InUse, messageOf, orderIssue, StatusSwitch, ViewOnlyNotice } from './shared';
+import { ConfirmDelete, DetailsDialog, FormDialog, InUse, messageOf, orderIssue, RowActions, StatusBadge, ViewOnlyNotice } from './shared';
 
 const KIND_LABEL: Record<DocumentKind, string> = { DOCUMENT: 'Document (PDF, JPG, PNG)', VIDEO: 'Video (MP4)' };
 
@@ -91,6 +91,7 @@ export default function DocumentsMasterPage() {
   const [done, setDone] = useState('');
   const [editing, setEditing] = useState<MasterDocument | 'new' | null>(null);
   const [deleting, setDeleting] = useState<MasterDocument | null>(null);
+  const [viewing, setViewing] = useState<MasterDocument | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -117,6 +118,7 @@ export default function DocumentsMasterPage() {
     try {
       await api(`/manage/documents/${encodeURIComponent(r.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list?.map((x) => (x.id === r.id ? { ...x, is_active: on } : x)) ?? null);
+      setDone(`Document ${r.name_en} ${on ? 'activated' : 'deactivated'}.`);
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
     }
@@ -159,13 +161,13 @@ export default function DocumentsMasterPage() {
                 <th>Required</th>
                 <th>Status</th>
                 <th>Used</th>
-                {canEdit ? <th>Actions</th> : null}
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit ? 8 : 7} className="center muted" style={{ padding: 28 }}>
+                  <td colSpan={8} className="center muted" style={{ padding: 28 }}>
                     No documents yet.
                   </td>
                 </tr>
@@ -180,42 +182,28 @@ export default function DocumentsMasterPage() {
                     <td>{r.kind === 'VIDEO' ? 'Video' : 'Document'}</td>
                     <td>{r.required ? 'Required' : 'Optional'}</td>
                     <td>
-                      <StatusSwitch name={r.name_en} on={r.is_active} canEdit={canEdit} onChange={(on) => setActive(r, on)} />
+                      <StatusBadge on={r.is_active} />
                     </td>
                     <td>
                       <InUse value={r.in_use} />
                     </td>
-                    {canEdit ? (
-                      <td>
-                        <div className="row-actions">
-                          <button
-                            type="button"
-                            className="btn ghost sm"
-                            aria-label={`Edit ${r.name_en}`}
-                            onClick={() => {
-                              setDone('');
-                              setEditing(r);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          {/* The program's own documents can be renamed, made optional and switched off, not deleted. */}
-                          {r.is_system ? null : (
-                            <button
-                              type="button"
-                              className="btn danger sm"
-                              aria-label={`Delete ${r.name_en}`}
-                              onClick={() => {
-                                setDone('');
-                                setDeleting(r);
-                              }}
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    ) : null}
+                    <td>
+                      <RowActions
+                        name={r.name_en}
+                        canEdit={canEdit}
+                        active={r.is_active}
+                        onView={() => setViewing(r)}
+                        onEdit={() => {
+                          setDone('');
+                          setEditing(r);
+                        }}
+                        onStatus={(on) => setActive(r, on)}
+                        onDelete={() => {
+                          setDone('');
+                          setDeleting(r);
+                        }}
+                      />
+                    </td>
                   </tr>
                 ))
               )}
@@ -223,11 +211,28 @@ export default function DocumentsMasterPage() {
           </table>
         </div>
       ) : null}
+      {viewing ? (
+        <DetailsDialog
+          title={viewing.name_en}
+          rows={[
+            ['Code', viewing.code],
+            ['Name (English)', viewing.name_en],
+            ['Name (Marathi)', viewing.name_mr],
+            ['File', viewing.kind === 'VIDEO' ? 'Video' : 'Document'],
+            ['Required', viewing.required ? 'Required' : 'Optional'],
+            ['Order', viewing.order],
+            ['Status', viewing.is_active ? 'Active' : 'Inactive'],
+            ['Comes with the program', viewing.is_system ? 'Yes' : 'No'],
+            ['Used on forms', typeof viewing.in_use === 'number' ? `${viewing.in_use} forms` : viewing.in_use ? 'Yes' : 'No'],
+          ]}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
       {editing && canEdit ? <DocumentDialog row={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={changed} /> : null}
       {deleting && canEdit ? (
         <ConfirmDelete
           name={deleting.name_en}
-          note="It is no longer asked. Files already uploaded stay with their forms."
+          note="Are you sure you want to delete this document? It is no longer asked. Files already uploaded stay with their forms."
           remove={async () => {
             await api(`/manage/documents/${encodeURIComponent(deleting.id)}`, { method: 'DELETE', realm: 'manage' });
             changed(`${deleting.name_en} deleted.`);

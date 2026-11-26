@@ -4,7 +4,7 @@ import { Field, Notice, useRemoteList } from '../../../components/ui';
 import { useCanEdit } from '../../../session';
 import type { GeoRef, MasterDistrict } from '../../../types';
 import { MastersShell } from '../ManageLayout';
-import { ConfirmDelete, FormDialog, InUse, messageOf, StatusSwitch, ViewOnlyNotice } from './shared';
+import { ConfirmDelete, DetailsDialog, FormDialog, InUse, messageOf, RowActions, StatusBadge, ViewOnlyNotice } from './shared';
 
 /* Add or edit a district: its name, code and state. */
 function DistrictDialog({ row, onClose, onSaved }: { row: MasterDistrict | null; onClose: () => void; onSaved: (message: string) => void }) {
@@ -84,6 +84,7 @@ export default function DistrictsPage() {
   const [done, setDone] = useState('');
   const [editing, setEditing] = useState<MasterDistrict | 'new' | null>(null);
   const [deleting, setDeleting] = useState<MasterDistrict | null>(null);
+  const [viewing, setViewing] = useState<MasterDistrict | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -110,6 +111,7 @@ export default function DistrictsPage() {
     try {
       await api(`/manage/districts/${encodeURIComponent(d.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list?.map((x) => (x.id === d.id ? { ...x, is_active: on } : x)) ?? null);
+      setDone(`District ${d.name} ${on ? 'activated' : 'deactivated'}.`);
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
     }
@@ -118,9 +120,7 @@ export default function DistrictsPage() {
   const needle = search.trim().toLowerCase();
   const shown =
     rows?.filter(
-      (d) =>
-        (!needle || d.name.toLowerCase().includes(needle) || d.code.toLowerCase().includes(needle)) &&
-        (!status || d.is_active === (status === 'ACTIVE')),
+      (d) => (!needle || d.name.toLowerCase().includes(needle) || d.code.toLowerCase().includes(needle)) && (!status || d.is_active === (status === 'ACTIVE')),
     ) ?? [];
   return (
     <MastersShell>
@@ -181,13 +181,13 @@ export default function DistrictsPage() {
                   <th>Status</th>
                   <th>Used</th>
                   <th>Talukas</th>
-                  {canEdit ? <th>Actions</th> : null}
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.length === 0 ? (
                   <tr>
-                    <td colSpan={canEdit ? 8 : 7} className="center muted" style={{ padding: 28 }}>
+                    <td colSpan={8} className="center muted" style={{ padding: 28 }}>
                       {needle || status ? 'No districts match.' : 'No districts yet.'}
                     </td>
                   </tr>
@@ -201,40 +201,29 @@ export default function DistrictsPage() {
                       <td className="mono nowrap">{d.code || '—'}</td>
                       <td>{d.state || '—'}</td>
                       <td>
-                        <StatusSwitch name={d.name} on={d.is_active} canEdit={canEdit} onChange={(on) => setActive(d, on)} />
+                        <StatusBadge on={d.is_active} />
                       </td>
                       <td>
                         <InUse value={d.in_use} />
                       </td>
                       <td>{d.talukas ?? '—'}</td>
-                      {canEdit ? (
-                        <td>
-                          <div className="row-actions">
-                            <button
-                              type="button"
-                              className="btn ghost sm"
-                              aria-label={`Edit ${d.name}`}
-                              onClick={() => {
-                                setDone('');
-                                setEditing(d);
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="btn danger sm"
-                              aria-label={`Delete ${d.name}`}
-                              onClick={() => {
-                                setDone('');
-                                setDeleting(d);
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      ) : null}
+                      <td>
+                        <RowActions
+                          name={d.name}
+                          canEdit={canEdit}
+                          active={d.is_active}
+                          onView={() => setViewing(d)}
+                          onEdit={() => {
+                            setDone('');
+                            setEditing(d);
+                          }}
+                          onStatus={(on) => setActive(d, on)}
+                          onDelete={() => {
+                            setDone('');
+                            setDeleting(d);
+                          }}
+                        />
+                      </td>
                     </tr>
                   ))
                 )}
@@ -242,6 +231,20 @@ export default function DistrictsPage() {
             </table>
           </div>
         </>
+      ) : null}
+      {viewing ? (
+        <DetailsDialog
+          title={viewing.name}
+          rows={[
+            ['Name', viewing.name],
+            ['Code', viewing.code],
+            ['State', viewing.state],
+            ['Talukas', viewing.talukas],
+            ['Status', viewing.is_active ? 'Active' : 'Inactive'],
+            ['Used on forms', typeof viewing.in_use === 'number' ? `${viewing.in_use} forms` : viewing.in_use ? 'Yes' : 'No'],
+          ]}
+          onClose={() => setViewing(null)}
+        />
       ) : null}
       {editing && canEdit ? <DistrictDialog row={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={changed} /> : null}
       {deleting && canEdit ? (

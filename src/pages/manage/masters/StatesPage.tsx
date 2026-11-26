@@ -4,7 +4,7 @@ import { Field, Notice } from '../../../components/ui';
 import { useCanEdit } from '../../../session';
 import type { MasterState } from '../../../types';
 import { MastersShell } from '../ManageLayout';
-import { ConfirmDelete, FormDialog, InUse, messageOf, StatusSwitch, ViewOnlyNotice } from './shared';
+import { ConfirmDelete, DetailsDialog, FormDialog, InUse, messageOf, RowActions, StatusBadge, ViewOnlyNotice } from './shared';
 
 /* Add or edit a state: its name and code. */
 function StateDialog({ row, onClose, onSaved }: { row: MasterState | null; onClose: () => void; onSaved: (message: string) => void }) {
@@ -62,6 +62,7 @@ export default function StatesPage() {
   const [done, setDone] = useState('');
   const [editing, setEditing] = useState<MasterState | 'new' | null>(null);
   const [deleting, setDeleting] = useState<MasterState | null>(null);
+  const [viewing, setViewing] = useState<MasterState | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -88,6 +89,7 @@ export default function StatesPage() {
     try {
       await api(`/manage/states/${encodeURIComponent(s.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list?.map((x) => (x.id === s.id ? { ...x, is_active: on } : x)) ?? null);
+      setDone(`State ${s.name} ${on ? 'activated' : 'deactivated'}.`);
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
     }
@@ -142,13 +144,13 @@ export default function StatesPage() {
                   <th>Districts</th>
                   <th>Status</th>
                   <th>Used</th>
-                  {canEdit ? <th>Actions</th> : null}
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.length === 0 ? (
                   <tr>
-                    <td colSpan={canEdit ? 7 : 6} className="center muted" style={{ padding: 28 }}>
+                    <td colSpan={7} className="center muted" style={{ padding: 28 }}>
                       {needle ? 'No states match.' : 'No states yet.'}
                     </td>
                   </tr>
@@ -162,39 +164,28 @@ export default function StatesPage() {
                       <td className="mono nowrap">{s.code || '—'}</td>
                       <td>{s.districts}</td>
                       <td>
-                        <StatusSwitch name={s.name} on={s.is_active} canEdit={canEdit} onChange={(on) => setActive(s, on)} />
+                        <StatusBadge on={s.is_active} />
                       </td>
                       <td>
                         <InUse value={s.in_use} />
                       </td>
-                      {canEdit ? (
-                        <td>
-                          <div className="row-actions">
-                            <button
-                              type="button"
-                              className="btn ghost sm"
-                              aria-label={`Edit ${s.name}`}
-                              onClick={() => {
-                                setDone('');
-                                setEditing(s);
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="btn danger sm"
-                              aria-label={`Delete ${s.name}`}
-                              onClick={() => {
-                                setDone('');
-                                setDeleting(s);
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      ) : null}
+                      <td>
+                        <RowActions
+                          name={s.name}
+                          canEdit={canEdit}
+                          active={s.is_active}
+                          onView={() => setViewing(s)}
+                          onEdit={() => {
+                            setDone('');
+                            setEditing(s);
+                          }}
+                          onStatus={(on) => setActive(s, on)}
+                          onDelete={() => {
+                            setDone('');
+                            setDeleting(s);
+                          }}
+                        />
+                      </td>
                     </tr>
                   ))
                 )}
@@ -202,6 +193,19 @@ export default function StatesPage() {
             </table>
           </div>
         </>
+      ) : null}
+      {viewing ? (
+        <DetailsDialog
+          title={viewing.name}
+          rows={[
+            ['Name', viewing.name],
+            ['Code', viewing.code],
+            ['Districts', viewing.districts],
+            ['Status', viewing.is_active ? 'Active' : 'Inactive'],
+            ['Used on forms', viewing.in_use ? 'Yes' : 'No'],
+          ]}
+          onClose={() => setViewing(null)}
+        />
       ) : null}
       {editing && canEdit ? <StateDialog row={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={changed} /> : null}
       {deleting && canEdit ? (

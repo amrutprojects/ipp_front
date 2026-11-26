@@ -145,6 +145,7 @@ export default function StudentFilters({
             onChange={(e) => onChange({ mobile: e.target.value.replace(/\D/g, '').slice(-10) })}
           />
         </label>
+        {/* The Centre filter is not offered for now (26 Nov 2026): a centre_id in the address is still applied.
         <Choice
           label="Centre"
           all="All centres"
@@ -152,6 +153,7 @@ export default function StudentFilters({
           options={choices(options?.centres)}
           onChange={(v) => onChange({ centre_id: v })}
         />
+        */}
         <Choice
           label="Final verification"
           all="All"

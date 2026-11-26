@@ -15,7 +15,7 @@ export const planOf = (b: Batch): BatchPlan => ({
   start_date: b.start_date ?? '',
   end_date: b.end_date ?? '',
   delivery_mode: b.delivery_mode ?? NO_PLAN.delivery_mode,
-  technology: b.technology?.code ?? '',
+  technology: b.technology?.id ?? '',
 });
 
 /* A real day of a year that can be meant: a year typed with two digits reads as 0026. */
@@ -31,6 +31,7 @@ export function plusMonths(iso: string, months: number): string {
 /* What is wrong with the dates; `half` = a date box that is only half filled in (it reads as empty). */
 export function planIssues(p: BatchPlan, half: { start_date?: boolean; end_date?: boolean } = {}): Record<string, string> {
   const e: Record<string, string> = {};
+  if (!p.technology) e.technology = 'Please select a technology.';
   if (half.start_date || (p.start_date && !isPlanDate(p.start_date))) e.start_date = 'Enter a valid start date';
   if (p.start_date && !e.start_date && p.end_date && p.end_date <= p.start_date) e.end_date = 'End date must be after the start date';
   else if (half.end_date || (p.end_date && !isPlanDate(p.end_date))) e.end_date = 'Enter a valid end date';
@@ -44,7 +45,7 @@ export const planBody = (p: BatchPlan) => ({
   delivery_mode: p.delivery_mode === NO_PLAN.delivery_mode ? undefined : p.delivery_mode,
   technology: p.technology || undefined,
 });
-/* For a saved one: only what changed; null clears a date or the technology. */
+/* For a saved one: only what changed; null clears a date. */
 export function planChanges(p: BatchPlan, saved: BatchPlan): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   for (const k of ['start_date', 'end_date', 'technology'] as const) if (p[k] !== saved[k]) body[k] = p[k] || null;

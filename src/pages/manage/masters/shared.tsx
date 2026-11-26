@@ -14,17 +14,7 @@ export function ViewOnlyNotice() {
 }
 
 /* Active / Inactive as a switch; a view-only account (or a row that cannot be switched, `why`) sees the state. */
-export function StatusSwitch({
-  name,
-  on,
-  canEdit,
-  onChange,
-}: {
-  name: string;
-  on: boolean;
-  canEdit: boolean;
-  onChange: (on: boolean) => Promise<void>;
-}) {
+export function StatusSwitch({ name, on, canEdit, onChange }: { name: string; on: boolean; canEdit: boolean; onChange: (on: boolean) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   if (!canEdit) return <span className={`badge ${on ? 'active' : 'inactive'}`}>{on ? 'Active' : 'Inactive'}</span>;
   return (
@@ -45,6 +35,103 @@ export function StatusSwitch({
     </button>
   );
 }
+
+/* Active / Inactive, as read. */
+export function StatusBadge({ on }: { on: boolean }) {
+  return <span className={`badge ${on ? 'active' : 'inactive'}`}>{on ? 'Active' : 'Inactive'}</span>;
+}
+
+/*
+ * The actions of a row: View for everyone; Edit, Activate / Deactivate and Delete for an ADMIN. An action left out is not
+ * offered (a row that cannot be deleted has no Delete); `children` are a row's own ones (Choices, Restore …).
+ */
+export function RowActions({
+  name,
+  canEdit,
+  active,
+  onView,
+  onEdit,
+  onStatus,
+  onDelete,
+  children,
+}: {
+  name: string;
+  canEdit: boolean;
+  active?: boolean;
+  onView?: () => void;
+  onEdit?: () => void;
+  /* Switches the row on or off. */
+  onStatus?: (on: boolean) => Promise<void>;
+  onDelete?: () => void;
+  children?: ReactNode;
+}) {
+  const [busy, setBusy] = useState(false);
+  const verb = active ? 'Deactivate' : 'Activate';
+  return (
+    <div className="row-actions">
+      {onView ? (
+        <button type="button" className="btn ghost sm" aria-label={`View ${name}`} onClick={onView}>
+          View
+        </button>
+      ) : null}
+      {canEdit && onEdit ? (
+        <button type="button" className="btn ghost sm" aria-label={`Edit ${name}`} onClick={onEdit}>
+          Edit
+        </button>
+      ) : null}
+      {canEdit && onStatus && active !== undefined ? (
+        <button
+          type="button"
+          className={active ? 'btn ghost sm' : 'btn sm'}
+          aria-label={`${verb} ${name}`}
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void onStatus(!active).finally(() => setBusy(false));
+          }}
+        >
+          {verb}
+        </button>
+      ) : null}
+      {children}
+      {canEdit && onDelete ? (
+        <button type="button" className="btn danger sm" aria-label={`Delete ${name}`} onClick={onDelete}>
+          Delete
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/* A row's details, read only (View). A value left empty shows "—". */
+export function DetailsDialog({ title, rows, onClose }: { title: string; rows: readonly (readonly [label: string, value: ReactNode])[]; onClose: () => void }) {
+  return (
+    <Modal title={title} onClose={onClose}>
+      <dl className="details">
+        {rows.map(([label, value]) => (
+          <div key={label} className="details-row">
+            <dt>{label}</dt>
+            <dd>{value === null || value === undefined || value === '' ? '—' : value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="actions">
+        <button type="button" className="btn ghost" onClick={onClose} data-autofocus>
+          Close
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/* A date and time as people read it (dd/mm/yyyy, hh:mm); '' = none. */
+export const whenText = (v: string | null | undefined) => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return '';
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()}, ${two(d.getHours())}:${two(d.getMinutes())}`;
+};
 
 /* Used on forms already sent: shown beside a row, so nobody deletes it unaware. */
 export function InUse({ value }: { value: boolean | number }) {

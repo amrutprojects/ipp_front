@@ -1,7 +1,17 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { isKnown, type Choice, type FieldDef, type FormModel } from '../form';
 import { MAIN_FIELDS, type Form, type RuleType } from '../types';
-import { chosen, chosenText, isCgpa, localToday, OWN_TEXTAREA_MAX, OWN_TEXT_MAX, YEAR_MAX, YEAR_MIN } from '../validation';
+import {
+  chosen,
+  chosenText,
+  dateLimits,
+  isCgpa,
+  localToday,
+  OWN_TEXTAREA_MAX,
+  OWN_TEXT_MAX,
+  YEAR_MAX,
+  YEAR_MIN,
+} from '../validation';
 import { Field, Notice } from './ui';
 
 /*
@@ -269,22 +279,38 @@ export function StepFields({
     const value = f.validation?.rules?.find((r) => r.type === type)?.value;
     return typeof value === 'number' ? value : undefined;
   };
-  /* The longest answer of a field drawn by its type: its own limit (which is also checked), else what the API takes. */
+  /* The longest answer of a field: its own limit (which is also checked), else what the API takes. */
   const longest = (f: FieldDef, most: number) => {
     const limit = limitIn(f, 'max_length');
     return limit && limit > 0 ? Math.min(limit, most) : most;
+  };
+  /* A date's calendar: the days its checks allow. */
+  const dateInput = (f: FieldDef) => {
+    const { min, max } = dateLimits(f.validation?.rules ?? [], today);
+    return input(f, 'date', { min, max });
+  };
+  /* Whether the field has this check (Masters → Form fields): the box is made for it then. */
+  const has = (f: FieldDef, type: RuleType) => !!f.validation?.rules?.some((r) => r.type === type);
+  /* A box for a number made of digits, by its check: as long as the check allows, typed on the number pad. */
+  const textInput = (f: FieldDef, extra: Record<string, unknown> = {}) => {
+    if (has(f, 'pin_code'))
+      return input(f, 'text', { inputMode: 'numeric', maxLength: 6, placeholder: T('६ अंकी पिन कोड', '6-digit PIN code'), ...extra }, digits(6));
+    if (has(f, 'aadhaar'))
+      return input(f, 'text', { inputMode: 'numeric', maxLength: 14, placeholder: T('१२ अंकी आधार क्रमांक', '12-digit Aadhaar number'), ...extra });
+    if (has(f, 'indian_mobile')) return input(f, 'tel', { maxLength: 15, ...extra });
+    return input(f, 'text', { maxLength: longest(f, OWN_TEXT_MAX), ...(has(f, 'digits') ? { inputMode: 'numeric' } : {}), ...extra });
   };
 
   const optional = (f: FieldDef, mr: string, en: string) => (f.required ? T(mr, en) : T(`ऐच्छिक. ${mr}`, `Optional. ${en}`));
   const control = (f: FieldDef): ReactNode => {
     switch (f.plain ? '' : f.key) {
       case 'first_name':
-        return field(f, input(f, 'text', { maxLength: 100, ...auto('given-name') }));
+        return field(f, textInput(f, auto('given-name')));
       case 'last_name':
-        return field(f, input(f, 'text', { maxLength: 100, ...auto('family-name') }));
+        return field(f, textInput(f, auto('family-name')));
       case 'father_name':
       case 'mother_name':
-        return field(f, input(f, 'text', { maxLength: 150 }));
+        return field(f, textInput(f));
       /* Read-only: the email ID the account was created and verified with (the API ignores any other value). */
       case 'email':
         return field(f, <input id="f-email" className="inp" type="email" value={form.email ?? ''} readOnly aria-readonly="true" />, {
@@ -294,11 +320,10 @@ export function StepFields({
           ),
         });
       case 'date_of_birth':
-        return field(f, input(f, 'date', { max: today, min: '1920-01-01' }));
       case 'qualification_completed_on':
-        return field(f, input(f, 'date', { max: today, min: '1950-01-01' }));
+        return field(f, dateInput(f));
       case 'current_address':
-        return field(f, textarea(f, 500), { wide: true });
+        return field(f, textarea(f, longest(f, OWN_TEXTAREA_MAX)), { wide: true });
       case 'permanent_address': {
         const canCopy = !!model.get('current_address') && !locked.current_address && !locked.permanent_address;
         const same = canCopy && rules.sameAddress;
@@ -310,7 +335,7 @@ export function StepFields({
                 {T('कायमचा पत्ता सध्याच्या पत्त्यासारखाच आहे', 'Permanent address is the same as the current address')}
               </label>
             ) : null}
-            {field(f, textarea(f, 500, { readOnly: same }), {
+            {field(f, textarea(f, longest(f, OWN_TEXTAREA_MAX), { readOnly: same }), {
               wide: true,
               hint: same
                 ? T(
@@ -323,50 +348,33 @@ export function StepFields({
         );
       }
       case 'landmark':
-        return field(f, input(f, 'text', { maxLength: 150 }));
       case 'taluka':
-        return field(f, input(f, 'text', { maxLength: 100 }));
+        return field(f, textInput(f));
       case 'pin_code':
-        return field(
-          f,
-          input(
-            f,
-            'text',
-            { inputMode: 'numeric', maxLength: 6, placeholder: T('६ अंकी पिन कोड', '6-digit PIN code'), ...auto('postal-code') },
-            digits(6),
-          ),
-        );
+        return field(f, textInput(f, auto('postal-code')));
       case 'aadhaar_number':
         return field(
           f,
-          input(f, 'text', {
-            inputMode: 'numeric',
-            maxLength: 14,
-            placeholder: editing ? (aadhaarMasked ?? '') : T('१२ अंकी आधार क्रमांक', '12-digit Aadhaar number'),
-            autoComplete: 'off',
-          }),
-          editing ? { required: false, hint: 'Leave it empty to keep the number on record; enter all 12 digits to change it.' } : {},
+          textInput(f, { autoComplete: 'off', ...(editing ? { placeholder: aadhaarMasked ?? '' } : {}) }),
+          editing ? { required: false, hint: 'Leave it empty to keep the number on record; enter it again to change it.' } : {},
         );
       case 'mobile_number':
-        return field(f, input(f, 'tel', { maxLength: 15, ...auto('tel') }));
+        return field(f, has(f, 'indian_mobile') ? input(f, 'tel', { maxLength: 15, ...auto('tel') }) : textInput(f, auto('tel')));
       case 'alternate_mobile_number':
-        return field(f, input(f, 'tel', { maxLength: 15 }), {
+        return field(f, has(f, 'indian_mobile') ? input(f, 'tel', { maxLength: 15 }) : textInput(f), {
           hint: optional(f, 'आपल्याशी संपर्कासाठी दुसरा क्रमांक.', 'A different number we can reach you on.'),
         });
       case 'alternate_email':
-        return field(f, input(f, 'email', { maxLength: 254 }), {
+        return field(f, input(f, has(f, 'email') ? 'email' : 'text', { maxLength: longest(f, OWN_TEXT_MAX) }), {
           hint: optional(f, 'खात्याच्या ईमेल आयडीपेक्षा वेगळा.', 'Different from the email ID of your account.'),
         });
       case 'disability_status':
         return radios(f);
       case 'disability_type':
-        return field(f, input(f, 'text', { maxLength: 100 }));
+        return field(f, textInput(f));
       case 'disability_certificate_number':
-        return field(f, input(f, 'text', { maxLength: 50 }), {
-          hint: T(
-            'प्रमाणपत्रावर छापल्याप्रमाणे: इंग्रजी अक्षरे, अंक, / आणि - (४–५० वर्ण). प्रमाणपत्र टप्पा ३ मध्ये अपलोड करा.',
-            'As printed on the certificate: letters, digits, / and - (4–50 characters). You will upload the certificate in step 3.',
-          ),
+        return field(f, textInput(f), {
+          hint: T('प्रमाणपत्रावर छापल्याप्रमाणे. प्रमाणपत्र टप्पा ३ मध्ये अपलोड करा.', 'As printed on the certificate. You will upload the certificate in step 3.'),
         });
       case 'technology': {
         const none = !choicesOf(f).length;
@@ -394,35 +402,30 @@ export function StepFields({
         );
       }
       case 'qualification_name':
-        return field(f, input(f, 'text', { maxLength: 150 }), {
+        return field(f, textInput(f), {
           hint: T(
             'नेमकी पात्रता लिहा, उदा. "Other Graduate" निवडल्यास "B.Sc. Agriculture".',
             'Specify the exact qualification, e.g. "B.Sc. Agriculture" when you chose "Other Graduate".',
           ),
         });
       case 'qualification_stream':
-        return field(f, input(f, 'text', { maxLength: 150 }));
       case 'qualification_board':
-        return field(f, input(f, 'text', { maxLength: 200 }));
+        return field(f, textInput(f));
       case 'score': {
         const grading = model.get('grading_type') ? model.text('grading_type', form) : '';
-        return field(
-          f,
-          input(f, 'text', { inputMode: 'decimal', maxLength: 6 }, (v) => (/^\d{0,3}(\.\d{0,2})?$/.test(v.trim()) ? v.trim() : null)),
-          {
-            label: grading ? `${f.label} (${grading})` : f.label,
-            hint: isCgpa(form)
-              ? T(
-                  `CGPA, जास्तीत जास्त २ दशांश स्थळे${form.cgpa_scale ? ` (०–${form.cgpa_scale})` : ''}.`,
-                  `CGPA, up to 2 decimal places${form.cgpa_scale ? ` (0–${form.cgpa_scale})` : ''}.`,
-                )
-              : form.grading_type === 'PERCENTAGE'
-                ? T('टक्केवारी, ०–१००, जास्तीत जास्त २ दशांश स्थळे.', 'Percentage, 0–100, up to 2 decimal places.')
-                : model.get('grading_type')
-                  ? T('आधी गुणांकन पद्धत निवडा.', 'Choose the grading type first.')
-                  : undefined,
-          },
-        );
+        /* What its checks allow, said beside it: its range by the grading, and its decimal places. */
+        const places = limitIn(f, 'max_decimals');
+        const range = has(f, 'grading_scale') ? (isCgpa(form) ? (form.cgpa_scale ? `0–${form.cgpa_scale}` : '') : form.grading_type === 'PERCENTAGE' ? '0–100' : '') : '';
+        const parts = [range, places === undefined ? '' : places === 0 ? T('पूर्णांक', 'a whole number') : T(`जास्तीत जास्त ${places} दशांश स्थळे`, `up to ${places} decimal places`)].filter(Boolean);
+        const kind = isCgpa(form) ? 'CGPA' : form.grading_type === 'PERCENTAGE' ? T('टक्केवारी', 'Percentage') : '';
+        return field(f, input(f, 'text', { inputMode: 'decimal', maxLength: 20 }), {
+          label: grading ? `${f.label} (${grading})` : f.label,
+          hint: kind
+            ? `${kind}${parts.length ? `, ${parts.join(', ')}` : ''}.`
+            : model.get('grading_type') && has(f, 'grading_scale')
+              ? T('आधी गुणांकन पद्धत निवडा.', 'Choose the grading type first.')
+              : undefined,
+        });
       }
       default:
         /* The other lists, and the fields drawn by their type (one this portal does not know: a text box). */
@@ -455,11 +458,11 @@ export function StepFields({
           case 'TEXTAREA':
             return field(f, textarea(f, longest(f, OWN_TEXTAREA_MAX)), { wide: true });
           case 'NUMBER':
-            return field(f, input(f, 'text', { inputMode: 'decimal', maxLength: 20 }));
+            return field(f, input(f, 'text', { inputMode: limitIn(f, 'max_decimals') === 0 || has(f, 'whole_number') ? 'numeric' : 'decimal', maxLength: 20 }));
           case 'DATE':
-            return field(f, input(f, 'date'));
+            return field(f, dateInput(f));
           default:
-            return field(f, input(f, 'text', { maxLength: longest(f, OWN_TEXT_MAX) }));
+            return field(f, textInput(f));
         }
     }
   };

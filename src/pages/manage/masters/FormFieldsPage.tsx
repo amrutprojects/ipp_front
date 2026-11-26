@@ -8,8 +8,8 @@ import type { FieldType, MasterField } from '../../../types';
 import { MastersShell } from '../ManageLayout';
 import { checksText } from './fieldChecks';
 import MasterList from './MasterList';
-import { ConfirmDelete, FormDialog, messageOf, orderIssue, StatusSwitch, ViewOnlyNotice } from './shared';
-import ValidationSection, { useValidation } from './ValidationSection';
+import { ConfirmDelete, DetailsDialog, FormDialog, messageOf, orderIssue, RowActions, StatusBadge, ViewOnlyNotice, whenText } from './shared';
+import ValidationSection, { useValidation, type OtherField } from './ValidationSection';
 
 const TYPES: [group: string, types: [FieldType, string][]][] = [
   [
@@ -163,7 +163,17 @@ function ChoiceRows({ choices, onChange, error }: { choices: ChoiceRow[]; onChan
 }
 
 /* Add an own field: its step, names, type, choices, validation, and whether it is required. */
-function AddFieldDialog({ step: at, onClose, onSaved }: { step: number; onClose: () => void; onSaved: (message: string) => void }) {
+function AddFieldDialog({
+  step: at,
+  others,
+  onClose,
+  onSaved,
+}: {
+  step: number;
+  others: readonly OtherField[];
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
   const [step, setStep] = useState(String(at));
   const [labelEn, setLabelEn] = useState('');
   const [labelMr, setLabelMr] = useState('');
@@ -216,7 +226,7 @@ function AddFieldDialog({ step: at, onClose, onSaved }: { step: number; onClose:
             </select>
           </Field>
           {hasChoices(type) ? <ChoiceRows choices={choices} onChange={setChoices} error={errors.options} /> : null}
-          <ValidationSection v={validation} type={type} label={labelEn} />
+          <ValidationSection v={validation} type={type} label={labelEn} fields={others} />
           <label className="check">
             <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} />
             <span>Required: the step cannot be completed without it</span>
@@ -228,7 +238,17 @@ function AddFieldDialog({ step: at, onClose, onSaved }: { step: number; onClose:
 }
 
 /* Edit a field: names, help, order, step, type, choices, validation, whether it is required and asked at all. */
-function EditFieldDialog({ field: f, onClose, onSaved }: { field: MasterField; onClose: () => void; onSaved: (message: string) => void }) {
+function EditFieldDialog({
+  field: f,
+  others,
+  onClose,
+  onSaved,
+}: {
+  field: MasterField;
+  others: readonly OtherField[];
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
   const [v, setV] = useState({
     label_en: f.label_en,
     label_mr: f.label_mr ?? '',
@@ -315,7 +335,7 @@ function EditFieldDialog({ field: f, onClose, onSaved }: { field: MasterField; o
             </select>
           </Field>
           {newChoices ? <ChoiceRows choices={choices} onChange={setChoices} error={errors.options} /> : null}
-          <ValidationSection v={validation} type={v.type} label={v.label_en} />
+          <ValidationSection v={validation} type={v.type} label={v.label_en} fields={others} />
           <label className="check">
             <input type="checkbox" checked={v.required} onChange={(e) => set('required', e.target.checked)} />
             <span>Required</span>
@@ -337,17 +357,24 @@ export default function FormFieldsPage() {
   const [rows, setRows] = useState<MasterField[] | null>(null);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
-  /* Add to a step, edit or delete a field; null = closed. */
+  /* Add to a step, view, edit, delete or restore a field; null = closed. */
   const [adding, setAdding] = useState<number | null>(null);
+  const [viewing, setViewing] = useState<MasterField | null>(null);
   const [editing, setEditing] = useState<MasterField | null>(null);
   const [deleting, setDeleting] = useState<MasterField | null>(null);
+  /* The deleted fields, to bring back. */
+  const [deleted, setDeleted] = useState<MasterField[]>([]);
   /* The field whose own choices are open. */
   const [choicesOf, setChoicesOf] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await api<MasterField[]>('/manage/fields', { realm: 'manage' });
+      const [res, gone] = await Promise.all([
+        api<MasterField[]>('/manage/fields', { realm: 'manage' }),
+        api<MasterField[]>('/manage/fields/deleted', { realm: 'manage' }).catch(() => ({ data: [] as MasterField[] })),
+      ]);
       setRows([...res.data].sort((a, b) => a.step - b.step || a.order - b.order));
+      setDeleted(gone.data ?? []);
       setError('');
     } catch (e) {
       setError(messageOf(e, 'Could not load the fields'));
@@ -370,10 +397,25 @@ export default function FormFieldsPage() {
     try {
       await api(`/manage/fields/${encodeURIComponent(f.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list?.map((x) => (x.id === f.id ? { ...x, is_active: on } : x)) ?? null);
+      setDone(`Field ${f.label_en} ${on ? 'activated: it is asked on the form' : 'deactivated: it is no longer asked'}.`);
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
     }
   };
+
+  const restore = async (f: MasterField) => {
+    setDone('');
+    setError('');
+    try {
+      await api(`/manage/fields/${encodeURIComponent(f.id)}/restore`, { method: 'POST', realm: 'manage' });
+      changed(`Field ${f.label_en} restored. It is off: activate it to ask it again.`);
+    } catch (e) {
+      setError(messageOf(e, 'Could not restore'));
+    }
+  };
+  /* The other fields a check can name ("different from"). */
+  const othersOf = (f: MasterField | null) => (rows ?? []).filter((x) => x.id !== f?.id).map((x) => ({ key: x.key, label: x.label_en }));
+  const labelOf = (key: string) => rows?.find((x) => x.key === key)?.label_en ?? key;
 
   const choices = (f: MasterField) => {
     if (!hasChoices(f.type)) return null;
@@ -403,8 +445,9 @@ export default function FormFieldsPage() {
         <h2 style={{ margin: 0 }}>Form fields</h2>
       </div>
       <p className="hint" style={{ marginTop: -4 }}>
-        Labels, help texts and own fields appear in every login. Every field can be changed, made optional or switched off; a field
-        that is off is not asked, and answers already given stay stored.
+        Labels, help texts and own fields appear in every login. Every field can be viewed, changed, made optional, switched off or
+        deleted, and every check of it is set here: nothing is fixed in the form. A field that is off or deleted is not asked; answers
+        already given stay stored, and a deleted field can be restored below.
       </p>
       {!canEdit ? <ViewOnlyNotice /> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
@@ -456,49 +499,32 @@ export default function FormFieldsPage() {
                               <b>{f.label_en}</b>
                               {f.custom ? <span className="badge own-mark">Own field</span> : null}
                               {f.help_en ? <div className="hint">{f.help_en}</div> : null}
-                              {checksText(f.validation) ? <div className="hint">Checks: {checksText(f.validation)}</div> : null}
+                              {checksText(f.validation, labelOf) ? <div className="hint">Checks: {checksText(f.validation, labelOf)}</div> : null}
                             </td>
                             <td lang="mr">{f.label_mr || '—'}</td>
                             <td>{typeName(f.type)}</td>
                             <td>{f.required ? 'Required' : 'Optional'}</td>
                             <td>
-                              <StatusSwitch
-                                name={f.label_en}
-                                on={f.is_active}
-                                canEdit={canEdit}
-                                onChange={(on) => setActive(f, on)}
-                              />
+                              <StatusBadge on={f.is_active} />
                             </td>
                             <td>
-                              <div className="row-actions">
-                                {canEdit ? (
-                                  <button
-                                    type="button"
-                                    className="btn ghost sm"
-                                    aria-label={`Edit ${f.label_en}`}
-                                    onClick={() => {
-                                      setDone('');
-                                      setEditing(f);
-                                    }}
-                                  >
-                                    Edit
-                                  </button>
-                                ) : null}
+                              <RowActions
+                                name={f.label_en}
+                                canEdit={canEdit}
+                                active={f.is_active}
+                                onView={() => setViewing(f)}
+                                onEdit={() => {
+                                  setDone('');
+                                  setEditing(f);
+                                }}
+                                onStatus={(on) => setActive(f, on)}
+                                onDelete={() => {
+                                  setDone('');
+                                  setDeleting(f);
+                                }}
+                              >
                                 {choices(f)}
-                                {canEdit && f.custom ? (
-                                  <button
-                                    type="button"
-                                    className="btn danger sm"
-                                    aria-label={`Delete ${f.label_en}`}
-                                    onClick={() => {
-                                      setDone('');
-                                      setDeleting(f);
-                                    }}
-                                  >
-                                    Delete
-                                  </button>
-                                ) : null}
-                              </div>
+                              </RowActions>
                             </td>
                           </tr>
                           {choicesOf === f.id ? (
@@ -516,12 +542,85 @@ export default function FormFieldsPage() {
             </section>
           ))
         : null}
-      {adding !== null && canEdit ? <AddFieldDialog step={adding} onClose={() => setAdding(null)} onSaved={changed} /> : null}
-      {editing && canEdit ? <EditFieldDialog field={editing} onClose={() => setEditing(null)} onSaved={changed} /> : null}
+      {rows && deleted.length ? (
+        <section aria-labelledby="fields-deleted" style={{ marginBottom: 24 }}>
+          <h3 id="fields-deleted" style={{ margin: '0 0 8px' }}>
+            Deleted fields
+          </h3>
+          <p className="hint" style={{ marginTop: 0 }}>
+            Not asked. Answers already given stay stored. A field restored comes back switched off.
+          </p>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Label (English)</th>
+                  <th>Step</th>
+                  <th>Type</th>
+                  <th>Deleted on</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deleted.map((f) => (
+                  <tr key={f.id}>
+                    <td>
+                      <b>{f.label_en}</b>
+                      {f.custom ? <span className="badge own-mark">Own field</span> : null}
+                    </td>
+                    <td>{STEP_TITLE[f.step] ?? f.step}</td>
+                    <td>{typeName(f.type)}</td>
+                    <td>{whenText(f.deleted_at) || '—'}</td>
+                    <td>
+                      <RowActions name={f.label_en} canEdit={canEdit} onView={() => setViewing(f)}>
+                        {canEdit ? (
+                          <button type="button" className="btn sm" aria-label={`Restore ${f.label_en}`} onClick={() => void restore(f)}>
+                            Restore
+                          </button>
+                        ) : null}
+                      </RowActions>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+      {viewing ? (
+        <DetailsDialog
+          title={viewing.label_en}
+          rows={[
+            ['Label (English)', viewing.label_en],
+            ['Label (Marathi)', viewing.label_mr],
+            ['Key', <span className="mono">{viewing.key}</span>],
+            ['Step', STEP_TITLE[viewing.step] ?? viewing.step],
+            ['Order', viewing.order],
+            ['Type', typeName(viewing.type)],
+            ['Required', viewing.required ? 'Required' : 'Optional'],
+            ['Status', viewing.deleted_at ? 'Deleted' : viewing.is_active ? 'Active: asked on the form' : 'Inactive: not asked'],
+            ['Kind', viewing.custom ? 'Own field (added here)' : 'Comes with the program'],
+            ['Help (English)', viewing.help_en],
+            ['Help (Marathi)', viewing.help_mr],
+            ['Checks', checksText(viewing.validation, labelOf) || 'None: only its type is checked'],
+            ['Custom checks', (viewing.validation?.custom ?? []).map((c) => c.message_en).join('; ')],
+            ['Added on', whenText(viewing.created_at)],
+            ['Last changed', whenText(viewing.updated_at)],
+            ...(viewing.deleted_at ? ([['Deleted on', whenText(viewing.deleted_at)]] as const) : []),
+          ]}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
+      {adding !== null && canEdit ? (
+        <AddFieldDialog step={adding} others={othersOf(null)} onClose={() => setAdding(null)} onSaved={changed} />
+      ) : null}
+      {editing && canEdit ? (
+        <EditFieldDialog field={editing} others={othersOf(editing)} onClose={() => setEditing(null)} onSaved={changed} />
+      ) : null}
       {deleting && canEdit ? (
         <ConfirmDelete
           name={deleting.label_en}
-          note="It is no longer asked or shown. Answers already given stay stored."
+          note="It is no longer asked or shown. Answers already given stay stored, and it can be restored from Deleted fields."
           remove={async () => {
             await api(`/manage/fields/${encodeURIComponent(deleting.id)}`, { method: 'DELETE', realm: 'manage' });
             changed(`Field ${deleting.label_en} deleted.`);

@@ -3,7 +3,7 @@ import { api, type PageMeta } from '../../../api';
 import { Field, Notice } from '../../../components/ui';
 import { useCanEdit } from '../../../session';
 import type { MasterOption } from '../../../types';
-import { ConfirmDelete, FormDialog, InUse, messageOf, orderIssue, StatusSwitch } from './shared';
+import { ConfirmDelete, DetailsDialog, FormDialog, InUse, messageOf, orderIssue, RowActions, StatusBadge } from './shared';
 
 const LIMIT = 25;
 
@@ -106,6 +106,7 @@ export default function MasterList({
   /* The dialogs: a row = edit it; 'new' = add; null = closed. */
   const [editing, setEditing] = useState<MasterOption | 'new' | null>(null);
   const [deleting, setDeleting] = useState<MasterOption | null>(null);
+  const [viewing, setViewing] = useState<MasterOption | null>(null);
 
   const latest = useRef(0);
   const load = useCallback(async () => {
@@ -156,6 +157,7 @@ export default function MasterList({
     try {
       await api<MasterOption>(`${path}/${encodeURIComponent(r.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list.map((x) => (x.id === r.id ? { ...x, is_active: on } : x)));
+      setDone(`Choice ${r.name_en} ${on ? 'activated' : 'deactivated'}.`);
       onChanged?.();
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
@@ -183,14 +185,7 @@ export default function MasterList({
       {error ? <Notice tone="error">{error}</Notice> : null}
       {done ? <Notice tone="ok">{done}</Notice> : null}
       <div className="toolbar">
-        <input
-          className="inp"
-          type="search"
-          placeholder="Search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label={`Search ${title}`}
-        />
+        <input className="inp" type="search" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} aria-label={`Search ${title}`} />
         <select
           className="inp"
           style={{ maxWidth: 180 }}
@@ -217,13 +212,13 @@ export default function MasterList({
               <th>Name (Marathi)</th>
               <th>Status</th>
               <th>Used</th>
-              {canEdit ? <th>Actions</th> : null}
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={(canEdit ? 6 : 5) + (showCode ? 1 : 0)} className="center muted" style={{ padding: 28 }}>
+                <td colSpan={6 + (showCode ? 1 : 0)} className="center muted" style={{ padding: 28 }}>
                   {loading ? 'Loading…' : query || status ? 'Nothing matches.' : 'Nothing in the list yet.'}
                 </td>
               </tr>
@@ -238,41 +233,32 @@ export default function MasterList({
                   </td>
                   <td lang="mr">{r.name_mr || '—'}</td>
                   <td>
-                    <StatusSwitch name={r.name_en} on={r.is_active} canEdit={canEdit} onChange={(on) => setActive(r, on)} />
+                    <StatusBadge on={r.is_active} />
                   </td>
                   <td>
                     <InUse value={r.in_use} />
                   </td>
-                  {canEdit ? (
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          type="button"
-                          className="btn ghost sm"
-                          aria-label={`Edit ${r.name_en}`}
-                          onClick={() => {
-                            setDone('');
-                            setEditing(r);
-                          }}
-                        >
-                          Edit
-                        </button>
-                        {canDelete && !r.is_system ? (
-                          <button
-                            type="button"
-                            className="btn danger sm"
-                            aria-label={`Delete ${r.name_en}`}
-                            onClick={() => {
+                  <td>
+                    <RowActions
+                      name={r.name_en}
+                      canEdit={canEdit}
+                      active={r.is_active}
+                      onView={() => setViewing(r)}
+                      onEdit={() => {
+                        setDone('');
+                        setEditing(r);
+                      }}
+                      onStatus={(on) => setActive(r, on)}
+                      onDelete={
+                        canDelete && !r.is_system
+                          ? () => {
                               setDone('');
                               setDeleting(r);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  ) : null}
+                            }
+                          : undefined
+                      }
+                    />
+                  </td>
                 </tr>
               ))
             )}
@@ -291,6 +277,21 @@ export default function MasterList({
             Next →
           </button>
         </div>
+      ) : null}
+      {viewing ? (
+        <DetailsDialog
+          title={viewing.name_en}
+          rows={[
+            ['Code', viewing.code],
+            ['Name (English)', viewing.name_en],
+            ['Name (Marathi)', viewing.name_mr],
+            ['Order', viewing.order],
+            ['Status', viewing.is_active ? 'Active' : 'Inactive'],
+            ['Comes with the program', viewing.is_system ? 'Yes: can be renamed and switched off, not deleted' : 'No'],
+            ['Used on forms', typeof viewing.in_use === 'number' ? `${viewing.in_use} forms` : viewing.in_use ? 'Yes' : 'No'],
+          ]}
+          onClose={() => setViewing(null)}
+        />
       ) : null}
       {editing && canEdit ? (
         <OptionDialog

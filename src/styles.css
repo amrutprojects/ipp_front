@@ -1,6 +1,6 @@
 /*
  * The AMRUT palette (warm saffron / cream / maroon), the same tokens as the AMRUT admin panel
- * (amrut-kalash-admin src/styles/styles.css), so the portal and its sign-in screens look like one family.
+ * (sarthi-admin src/styles/styles.css), so the portal and its sign-in screens look like one family.
  */
 :root {
   --brand-900: #3f1b06;

@@ -150,8 +150,8 @@ describe('Masters: states', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('State Maharashtra saved.')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('switch', { name: 'Goa: active' }));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Goa: active' })).toHaveAttribute('aria-checked', 'true'));
+    await userEvent.click(screen.getByRole('button', { name: 'Activate Goa' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Deactivate Goa' })).toBeInTheDocument());
     expect(writes(calls)).toEqual([
       ['PATCH', '/manage/states/s2', { code: 'GOA' }],
       ['PATCH', '/manage/states/s2', { is_active: true }],
@@ -184,9 +184,9 @@ describe('Masters: states', () => {
     let list: Response | undefined;
     mockApi({ states: () => list ?? json(200, { data: STATES }), write: () => json(403, { message: 'Your account can only view.' }) });
     const { unmount } = renderAt('/manage/masters/states');
-    await userEvent.click(await screen.findByRole('switch', { name: 'Maharashtra: active' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate Maharashtra' }));
     expect(await screen.findByText('Your account can only view.')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Maharashtra: active' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Deactivate Maharashtra' })).toBeInTheDocument();
     unmount();
     list = json(500, { message: 'Something went wrong' });
     renderAt('/manage/masters/states');
@@ -369,8 +369,8 @@ describe('Masters: talukas', () => {
     const refusal = 'This taluka cannot be deleted while 2 centers reference it. Deactivate it instead, or remove those records first.';
     const calls = mockApi({ write: (method, path) => (method === 'DELETE' && path.endsWith('/t1') ? json(409, { message: refusal }) : undefined) });
     renderAt('/manage/masters/talukas');
-    await userEvent.click(await screen.findByRole('switch', { name: 'Haveli: active' }));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Haveli: active' })).toHaveAttribute('aria-checked', 'true'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Activate Haveli' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Deactivate Haveli' })).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete Baramati' }));
     let ask = screen.getByRole('alertdialog', { name: 'Delete Baramati?' });
@@ -415,9 +415,10 @@ describe('States and talukas: a view-only account', () => {
     renderAt(path);
     expect(await screen.findByText(text)).toBeInTheDocument();
     expect(screen.getByText(VIEW_ONLY)).toBeInTheDocument();
-    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Activate|Deactivate) / })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add|Edit|Delete|Save/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: 'Actions' })).not.toBeInTheDocument();
+    /* View is for everyone: the Actions column stays, with View only. */
+    expect(within(row(new RegExp(text))).getByRole('button', { name: `View ${text}` })).toBeInTheDocument();
     expect(within(row(new RegExp(text))).getByText('Active')).toHaveClass('badge');
     expect(writes(calls)).toEqual([]);
   });

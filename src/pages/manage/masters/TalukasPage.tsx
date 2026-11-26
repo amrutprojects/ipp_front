@@ -4,7 +4,7 @@ import { Field, Notice, useRemoteList, type RemoteList } from '../../../componen
 import { useCanEdit } from '../../../session';
 import type { MasterDistrict, MasterTaluka } from '../../../types';
 import { MastersShell } from '../ManageLayout';
-import { ConfirmDelete, FormDialog, InUse, messageOf, StatusSwitch, ViewOnlyNotice } from './shared';
+import { ConfirmDelete, DetailsDialog, FormDialog, InUse, messageOf, RowActions, StatusBadge, ViewOnlyNotice } from './shared';
 
 const LIMIT = 25;
 
@@ -55,9 +55,7 @@ function TalukaDialog({
         district_id: !districtId ? 'District is required' : '',
         name: !name.trim() ? 'Name is required' : name.trim().length < 2 || name.trim().length > 100 ? 'Name must be 2–100 characters' : '',
         code:
-          code.trim() && !/^[A-Z][A-Z0-9-]{1,19}$/.test(code.trim().toUpperCase())
-            ? 'Code: 2–20 characters, A–Z, 0–9 and hyphen, starting with a letter'
-            : '',
+          code.trim() && !/^[A-Z][A-Z0-9-]{1,19}$/.test(code.trim().toUpperCase()) ? 'Code: 2–20 characters, A–Z, 0–9 and hyphen, starting with a letter' : '',
       })}
       save={save}
       onClose={onClose}
@@ -127,6 +125,7 @@ export default function TalukasPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<MasterTaluka | 'new' | null>(null);
   const [deleting, setDeleting] = useState<MasterTaluka | null>(null);
+  const [viewing, setViewing] = useState<MasterTaluka | null>(null);
 
   /* Only the newest request's answer is shown. */
   const latest = useRef(0);
@@ -177,6 +176,7 @@ export default function TalukasPage() {
     try {
       await api(`/manage/talukas/${encodeURIComponent(r.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list.map((x) => (x.id === r.id ? { ...x, is_active: on } : x)));
+      setDone(`Taluka ${r.name} ${on ? 'activated' : 'deactivated'}.`);
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
     }
@@ -258,13 +258,13 @@ export default function TalukasPage() {
               <th>District</th>
               <th>Status</th>
               <th>Used</th>
-              {canEdit ? <th>Actions</th> : null}
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={canEdit ? 7 : 6} className="center muted" style={{ padding: 28 }}>
+                <td colSpan={7} className="center muted" style={{ padding: 28 }}>
                   {loading ? 'Loading…' : query || status || district ? 'No talukas match.' : 'No talukas yet.'}
                 </td>
               </tr>
@@ -278,39 +278,28 @@ export default function TalukasPage() {
                   <td className="mono nowrap">{r.code || '—'}</td>
                   <td>{r.district || '—'}</td>
                   <td>
-                    <StatusSwitch name={r.name} on={r.is_active} canEdit={canEdit} onChange={(on) => setActive(r, on)} />
+                    <StatusBadge on={r.is_active} />
                   </td>
                   <td>
                     <InUse value={r.in_use} />
                   </td>
-                  {canEdit ? (
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          type="button"
-                          className="btn ghost sm"
-                          aria-label={`Edit ${r.name}`}
-                          onClick={() => {
-                            setDone('');
-                            setEditing(r);
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="btn danger sm"
-                          aria-label={`Delete ${r.name}`}
-                          onClick={() => {
-                            setDone('');
-                            setDeleting(r);
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  ) : null}
+                  <td>
+                    <RowActions
+                      name={r.name}
+                      canEdit={canEdit}
+                      active={r.is_active}
+                      onView={() => setViewing(r)}
+                      onEdit={() => {
+                        setDone('');
+                        setEditing(r);
+                      }}
+                      onStatus={(on) => setActive(r, on)}
+                      onDelete={() => {
+                        setDone('');
+                        setDeleting(r);
+                      }}
+                    />
+                  </td>
                 </tr>
               ))
             )}
@@ -330,14 +319,21 @@ export default function TalukasPage() {
           </button>
         </div>
       ) : null}
-      {editing && canEdit ? (
-        <TalukaDialog
-          row={editing === 'new' ? null : editing}
-          districts={districts}
-          district={district}
-          onClose={() => setEditing(null)}
-          onSaved={changed}
+      {viewing ? (
+        <DetailsDialog
+          title={viewing.name}
+          rows={[
+            ['Name', viewing.name],
+            ['Code', viewing.code],
+            ['District', viewing.district],
+            ['Status', viewing.is_active ? 'Active' : 'Inactive'],
+            ['Used on forms', typeof viewing.in_use === 'number' ? `${viewing.in_use} forms` : viewing.in_use ? 'Yes' : 'No'],
+          ]}
+          onClose={() => setViewing(null)}
         />
+      ) : null}
+      {editing && canEdit ? (
+        <TalukaDialog row={editing === 'new' ? null : editing} districts={districts} district={district} onClose={() => setEditing(null)} onSaved={changed} />
       ) : null}
       {deleting && canEdit ? (
         <ConfirmDelete

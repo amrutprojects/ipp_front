@@ -71,11 +71,15 @@ export const RULE_TYPES = [
   'pin_code',
   'pan',
   'ifsc',
+  'email',
+  'indian_mobile',
+  'aadhaar',
   'min_length',
   'max_length',
   'whole_number',
   'min_digits',
   'max_digits',
+  'max_decimals',
   'min_value',
   'max_value',
   'not_future',
@@ -88,11 +92,16 @@ export const RULE_TYPES = [
   'max_time',
   'min_choices',
   'max_choices',
+  'different_from',
+  'grading_scale',
 ] as const;
 export type RuleType = (typeof RULE_TYPES)[number];
 export interface ValidationRule {
   type: RuleType;
-  /* The limit of min_… and max_…: a number; a day (YYYY-MM-DD) of min_date and max_date, HH:MM of min_time and max_time. */
+  /*
+   * The limit of min_… and max_…: a number; a day (YYYY-MM-DD) of min_date and max_date, HH:MM of min_time and max_time; of
+   * different_from the key of the other field.
+   */
   value?: number | string;
 }
 interface CheckMessages {
@@ -144,6 +153,7 @@ export interface CentreOption {
 }
 /* A technology (T01, T02, …); which ones a student may choose depends on the student's district. */
 export interface TechnologyOption {
+  id?: string;
   code: string;
   name: string;
 }
@@ -202,7 +212,7 @@ export interface HelpContent {
   intro: string;
   fields: HelpField[];
 }
-/* How many name / value lines the Help panel holds (amrut-kalash-api EDP_HELP_FIELDS). */
+/* How many name / value lines the Help panel holds (sarthi-api EDP_HELP_FIELDS). */
 export const HELP_FIELDS = 4;
 
 /* When a settings row was last saved, and by whom; null = the API's defaults are in use. */
@@ -318,7 +328,7 @@ export interface Submitted {
 
 export type Stage = 'OTP_PENDING' | 'VERIFIED' | 'BASIC_DONE' | 'MAIN_DONE' | 'SUBMITTED';
 
-/* Follow-up statuses of the tracking panel (amrut-kalash-api EDP_FOLLOW_UP_STATUS). */
+/* Follow-up statuses of the tracking panel (sarthi-api EDP_FOLLOW_UP_STATUS). */
 export const FOLLOW_UP_STATUS = {
   PENDING: 'Pending follow-up',
   CALLED: 'Follow-up call',
@@ -667,6 +677,10 @@ export interface MasterField extends FieldConfig {
   is_active: boolean;
   /* The types it can be given (absent from an older API: any for an own field, else only its own). */
   types?: FieldType[];
+  created_at?: string;
+  updated_at?: string;
+  /* Set on a deleted field (GET /manage/fields/deleted). */
+  deleted_at?: string | null;
 }
 
 /* GET /manage/states: every state, active or not; districts = how many it has. */
@@ -700,7 +714,7 @@ export interface MasterTaluka {
   in_use: boolean;
 }
 
-/* Center Master (the tracking panel's /manage/centres; the same shape as in the Kalash admin panel). */
+/* Center Master (the tracking panel's /manage/centres; the same shape as in the Sarthi admin panel). */
 export interface CentreTechnology {
   code: string;
   name: string;
@@ -756,4 +770,5 @@ export interface ManageUser {
   is_active: boolean;
   last_login_at: string | null;
   created_at: string;
+  updated_at?: string;
 }

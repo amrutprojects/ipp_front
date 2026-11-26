@@ -28,7 +28,7 @@ export const docRequired = (t: DocumentType) => t.is_mandatory;
 
 /* The name of a field error key, for the list of what to correct. */
 function labelOf(key: string, options: Options, model: FormModel): string {
-  if (key === 'declaration') return 'Declaration';
+  if (key === 'declaration') return model.T('घोषणापत्र', 'Declaration');
   const [kind, code] = key.split('.');
   if (kind === 'files' && code) {
     const doc = options.document_types.find((t) => t.code === code);
@@ -38,7 +38,8 @@ function labelOf(key: string, options: Options, model: FormModel): string {
 }
 const correctThese = (e: Record<string, string>, options: Options, model: FormModel) => {
   const keys = Object.keys(e).filter((k) => e[k]);
-  return keys.length ? `Please correct the highlighted fields: ${keys.map((k) => labelOf(k, options, model)).join(', ')}.` : '';
+  const names = keys.map((k) => labelOf(k, options, model)).join(', ');
+  return keys.length ? model.T(`कृपया खूण केलेली माहिती दुरुस्त करा: ${names}.`, `Please correct the highlighted fields: ${names}.`) : '';
 };
 
 /* Values typed but not yet saved on the server (e.g. the connection dropped), kept in this browser until they are. */
@@ -357,7 +358,7 @@ function FormWizard({
     for (const t of options.document_types) {
       if (docRequired(t) && !has(t.code)) e[`files.${t.code}`] = T(`${docName(t, lang)} आवश्यक आहे`, `${docName(t, lang)} is required`);
     }
-    if (!declaration) e.declaration = 'Please accept the declaration';
+    if (!declaration) e.declaration = T('कृपया घोषणापत्र स्वीकारा', 'Please accept the declaration');
     setErrors(e);
     const first = Object.keys(e).map(model.stepOf).sort()[0];
     if (first && first !== step) go(first);

@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { ApplicantDetail, FieldConfig, Form, ManageRole, Options, ViewField } from '../src/types';
+import { DEFAULT_CHECKS } from './defaultChecks';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -18,6 +19,7 @@ const config = (key: string, step: number, label_en: string, over: Partial<Field
   options_kind: null,
   help_en: null,
   help_mr: null,
+  validation: DEFAULT_CHECKS[key] ?? null,
   ...over,
 });
 const FIELDS: FieldConfig[] = [
@@ -225,7 +227,7 @@ describe('Edit form (tracking panel)', () => {
     await userEvent.click(within(screen.getByRole('group', { name: /Person with Disability/ })).getByRole('radio', { name: 'Yes' }));
     await userEvent.click(screen.getByRole('button', { name: /Save changes/ }));
     expect(screen.getByText('First Name is required')).toBeInTheDocument();
-    expect(screen.getByText('Aadhaar number must be 12 digits with a valid checksum')).toBeInTheDocument();
+    expect(screen.getByText('Aadhaar Number must be 12 digits with a valid checksum')).toBeInTheDocument();
     expect(screen.getByText('Technology is required')).toBeInTheDocument();
     expect(screen.getByText('Type of Disability is required')).toBeInTheDocument();
     /* The religion was not changed: its old value is not checked again. */

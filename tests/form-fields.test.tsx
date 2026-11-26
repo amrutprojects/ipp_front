@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { buildModel, viewRows } from '../src/form';
 import type { Application, FieldConfig, Form, Options, ViewField } from '../src/types';
+import { DEFAULT_CHECKS } from './defaultChecks';
 
 /*
  * The form as the masters define it (GET /edp/options → fields, lists, document_types, district_technologies): labels,
@@ -53,6 +54,7 @@ const FIELDS: FieldConfig[] = KEYS.map(([key, step, label_en, label_mr, over], i
   options_kind: null,
   help_en: null,
   help_mr: null,
+  validation: DEFAULT_CHECKS[key] ?? null,
   ...over,
 }));
 const item = (value: string, name_en: string, name_mr: string | null = null) => ({ value, name_en, name_mr });
@@ -383,10 +385,10 @@ describe('No field is fixed', () => {
     expect(screen.getByText(/not offered in this district/)).toBeInTheDocument();
   });
 
-  it('the checks of a known field come after its own format', async () => {
+  it('the checks of a known field are the ones set up for it', async () => {
     const options = withFields((f) =>
       f.key === 'mother_name'
-        ? { ...f, validation: { rules: [{ type: 'min_length', value: 20 }], custom: [] } }
+        ? { ...f, validation: { rules: [{ type: 'letters' }, { type: 'min_length', value: 20 }], custom: [] } }
         : f.key === 'aadhaar_number'
           ? { ...f, validation: { rules: [], custom: [{ kind: 'REGEX', source: '4\\d{11}', message_en: 'Starts with 4', message_mr: null }] } }
           : f,
@@ -403,7 +405,7 @@ describe('No field is fixed', () => {
     await userEvent.clear(screen.getByLabelText(/^Mother Name/));
     await userEvent.type(screen.getByLabelText(/^Mother Name/), 'M33na');
     await userEvent.click(screen.getByRole('button', { name: 'Save & Next →' }));
-    expect(screen.getByText("Mother Name may contain only letters, spaces and . ' -")).toBeInTheDocument();
+    expect(screen.getByText('Mother Name may contain only letters and spaces')).toBeInTheDocument();
   });
 
   it('a field moved to step 2 is asked before the qualification, one moved to step 1 in its place there', async () => {

@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { api, ApiError, type Realm } from '../api';
+import { api, ApiError, panelChangeCount, type Realm } from '../api';
 import { docName, useLang } from '../i18n';
 import type { Options } from '../types';
 
@@ -132,26 +132,56 @@ export function Notice({ tone, children }: { tone: 'info' | 'warn' | 'ok' | 'err
   );
 }
 
-/* Dropdown values and document types (active masters only), fetched once per page load. */
-let optionsCache: Promise<Options> | null = null;
-export function loadOptions(): Promise<Options> {
-  optionsCache ??= api<Options>('/options')
-    .then((r) => r.data)
-    .catch((e) => {
-      optionsCache = null;
-      throw e;
+/*
+ * The form's fields, dropdown values and document types as the masters are now (GET /edp/options). Kept for a short while
+ * and shared by every part of the page; asked again when a page that uses them opens, and when the student comes back to the
+ * tab, so a change in Masters → Form fields reaches a form that is already open. An answer that changed nothing keeps the
+ * same object: nothing is drawn again.
+ */
+export const OPTIONS_FRESH_MS = 15_000;
+let optionsKept: { at: number; changes: number; text: string; value: Options } | null = null;
+let optionsAsked: Promise<Options> | null = null;
+const optionsListeners = new Set<(o: Options) => void>();
+export function loadOptions(maxAgeMs = OPTIONS_FRESH_MS): Promise<Options> {
+  const fresh = optionsKept && optionsKept.changes === panelChangeCount() && Date.now() - optionsKept.at < maxAgeMs;
+  if (fresh) return Promise.resolve(optionsKept!.value);
+  optionsAsked ??= api<Options>('/options')
+    .then((r) => {
+      const text = JSON.stringify(r.data);
+      const at = { at: Date.now(), changes: panelChangeCount() };
+      if (optionsKept?.text === text) {
+        Object.assign(optionsKept, at);
+        return optionsKept.value;
+      }
+      optionsKept = { ...at, text, value: r.data };
+      for (const tell of optionsListeners) tell(r.data);
+      return r.data;
+    })
+    .finally(() => {
+      optionsAsked = null;
     });
-  return optionsCache;
+  return optionsAsked;
 }
 export function useOptions(): Options | null {
-  const [options, setOptions] = useState<Options | null>(null);
+  const [options, setOptions] = useState<Options | null>(() => optionsKept?.value ?? null);
   useEffect(() => {
     let live = true;
-    loadOptions()
-      .then((o) => live && setOptions(o))
-      .catch(() => undefined);
+    const show = (o: Options) => {
+      if (live) setOptions(o);
+    };
+    optionsListeners.add(show);
+    const ask = () => void loadOptions().then(show, () => undefined);
+    const back = () => {
+      if (document.visibilityState === 'visible') ask();
+    };
+    ask();
+    document.addEventListener('visibilitychange', back);
+    window.addEventListener('focus', back);
     return () => {
       live = false;
+      optionsListeners.delete(show);
+      document.removeEventListener('visibilitychange', back);
+      window.removeEventListener('focus', back);
     };
   }, []);
   return options;
@@ -292,7 +322,11 @@ export function Modal({
     };
   }, []);
   return (
-    <div className="backdrop" onClick={() => close.current()}>
+    /*
+     * A click outside the dialog does not close it: a text selected with the mouse that ends outside (or any slip of the
+     * mouse) would lose what was typed. It closes by its own buttons (Cancel, Close, ✕), Escape, or when it is done.
+     */
+    <div className="backdrop">
       <div
         ref={ref}
         className={wide ? 'modal wide' : 'modal'}
@@ -300,7 +334,6 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
       >
         {closeLabel ? (
           <button type="button" className="modal-x" onClick={() => close.current()} aria-label={closeLabel} title={closeLabel}>

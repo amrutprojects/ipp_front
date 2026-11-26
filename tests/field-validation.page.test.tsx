@@ -225,14 +225,29 @@ describe('Form fields: validation', () => {
       return [limitLabels(dialog), checkLabels(dialog)];
     };
     expect(await shown('TEXT')).toEqual([
-      ['Minimum characters', 'Maximum characters'],
-      ['Letters only', 'Digits only', 'Letters and digits only', 'No spaces', 'Capital letters only', 'PIN code (6 digits)', 'PAN number', 'IFSC code'],
+      ['Minimum characters', 'Maximum characters', 'Must be different from'],
+      [
+        'Letters only',
+        'Digits only',
+        'Letters and digits only',
+        'No spaces',
+        'Capital letters only',
+        'PIN code (6 digits)',
+        'PAN number',
+        'IFSC code',
+        'Email address',
+        'Indian mobile number (10 digits, starting 6–9)',
+        'Aadhaar number (12 digits, with its check digit)',
+      ],
     ]);
     expect(await shown('TEXTAREA')).toEqual([
-      ['Minimum characters', 'Maximum characters'],
+      ['Minimum characters', 'Maximum characters', 'Must be different from'],
       ['Letters only', 'Letters and digits only', 'Capital letters only'],
     ]);
-    expect(await shown('NUMBER')).toEqual([['Minimum value', 'Maximum value', 'Minimum digits', 'Maximum digits'], ['Whole number']]);
+    expect(await shown('NUMBER')).toEqual([
+      ['Minimum value', 'Maximum value', 'Minimum digits', 'Maximum digits', 'Maximum decimal places', 'Must be different from'],
+      ['Whole number', 'Within its grading (a percentage 0–100, a CGPA up to its scale)'],
+    ]);
     expect(await shown('DATE')).toEqual([
       ['Earliest date', 'Latest date', 'Minimum age (years)', 'Maximum age (years)'],
       ['Not in the future', 'Not in the past'],
@@ -246,7 +261,8 @@ describe('Form fields: validation', () => {
       ['Not in the future', 'Not in the past'],
     ]);
     expect(await shown('CHECKBOXES')).toEqual([['Minimum choices', 'Maximum choices'], []]);
-    for (const type of ['EMAIL', 'MOBILE', 'URL', 'DROPDOWN', 'RADIO', 'YES_NO', 'CONSENT'] as FieldType[]) expect(await shown(type)).toEqual([[], []]);
+    for (const type of ['EMAIL', 'MOBILE', 'URL'] as FieldType[]) expect(await shown(type)).toEqual([['Must be different from'], []]);
+    for (const type of ['DROPDOWN', 'RADIO', 'YES_NO', 'CONSENT'] as FieldType[]) expect(await shown(type)).toEqual([[], []]);
     await userEvent.selectOptions(typeBox(dialog), 'DROPDOWN');
     expect(within(dialog).getByText('The choices are the validation: only one of them is accepted. Custom checks can be added.')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: '+ Add regular expression' })).toBeEnabled();

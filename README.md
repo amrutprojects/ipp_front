@@ -1,7 +1,7 @@
 # 3 Month Internship Placement Program portal (ipp.sumago.ai)
 
 Student registration portal of the program by Sumago Infotech Pvt. Ltd., plus its tracking panel. It talks only to the
-`/api/v1/edp` endpoints of **amrut-kalash-api** (module `src/modules/students/edp`); it never calls the Amrut admin API.
+`/api/v1/edp` endpoints of **sarthi-api** (module `src/modules/students/edp`); it never calls the Amrut admin API.
 
 | Path | Who | What |
 | --- | --- | --- |
@@ -32,7 +32,7 @@ npm install
 npm run dev        # http://localhost:5175, /api proxied to http://localhost:5001
 ```
 
-API side (amrut-kalash-api): `npm run migration:run`, then `npm run edp:admin` to create a tracking-panel sign-in
+API side (sarthi-api): `npm run migration:run`, then `npm run edp:admin` to create a tracking-panel sign-in
 (credentials written to `.edp-admin-credentials`, git-ignored). Without SMTP settings the OTP is written to the API log
 (development only).
 
@@ -40,7 +40,7 @@ API side (amrut-kalash-api): `npm run migration:run`, then `npm run edp:admin` t
 
 Frontend (`.env`, see `.env.example`): `VITE_API_BASE_URL` (default `/api/v1`), `VITE_API_PROXY_TARGET` (dev server only).
 
-API (`.env` of amrut-kalash-api, see its `.env.example`):
+API (`.env` of sarthi-api, see its `.env.example`):
 
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`: the OTP and password reset emails. Gmail:
   `smtp.gmail.com`, `465`, `SMTP_SECURE=true`, an app password.

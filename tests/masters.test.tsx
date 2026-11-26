@@ -77,7 +77,7 @@ const FIELDS: MasterField[] = [
 ];
 /* As the page lists them: by step, then order. */
 const inOrder = (a: string, b: string) => {
-  const of = (name: string) => FIELDS.find((f) => name === `${f.label_en}: active`)!;
+  const of = (name: string) => FIELDS.find((f) => name === f.label_en)!;
   return of(a).step - of(b).step || of(a).order - of(b).order;
 };
 const DISTRICT_TECH: DistrictTechnologies[] = [
@@ -221,10 +221,8 @@ describe('Masters: dropdown lists', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Maratha saved.')).toBeInTheDocument();
 
-    const on = screen.getByRole('switch', { name: 'Kunbi: active' });
-    expect(on).toHaveAttribute('aria-checked', 'false');
-    await userEvent.click(on);
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Kunbi: active' })).toHaveAttribute('aria-checked', 'true'));
+    await userEvent.click(screen.getByRole('button', { name: 'Activate Kunbi' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Deactivate Kunbi' })).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete Kunbi' }));
     const ask = screen.getByRole('alertdialog', { name: 'Delete Kunbi?' });
@@ -241,9 +239,9 @@ describe('Masters: dropdown lists', () => {
   it('shows why a switch or a delete was refused', async () => {
     mockApi({ write: () => json(409, { message: 'It cannot be changed now' }) });
     renderAt('/manage/masters/lists/CASTE');
-    await userEvent.click(await screen.findByRole('switch', { name: 'Maratha: active' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate Maratha' }));
     expect(await screen.findByText('It cannot be changed now')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Maratha: active' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Deactivate Maratha' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Delete Maratha' }));
     const ask = screen.getByRole('alertdialog', { name: 'Delete Maratha?' });
     await userEvent.click(within(ask).getByRole('button', { name: 'Yes, delete' }));
@@ -300,15 +298,26 @@ describe('Masters: technologies', () => {
 });
 
 describe('Masters: documents', () => {
-  it('lists them in order, adds one with its kind, and deletes only added ones', async () => {
+  it('lists them in order, adds one with its kind, and offers deletion for every document', async () => {
     const calls = mockApi();
     renderAt('/manage/masters/documents');
     await screen.findByText('Photo');
     const rows = screen.getAllByRole('row').slice(1);
     expect(cells(rows[0]!).slice(0, 7)).toEqual(['1', 'Photo', 'छायाचित्र', 'Document', 'Required', 'Active', 'In use']);
     expect(cells(rows[1]!).slice(0, 7)).toEqual(['2', 'Introduction video', '—', 'Video', 'Optional', 'Active', 'Used on 3 forms']);
-    expect(screen.queryByRole('button', { name: 'Delete Photo' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Photo' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete Introduction video' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Photo' }));
+    const confirmation = screen.getByRole('alertdialog', { name: 'Delete Photo?' });
+    expect(confirmation).toHaveTextContent('Are you sure you want to delete this document?');
+    await userEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+    expect(writes(calls)).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Photo' }));
+    await userEvent.click(within(screen.getByRole('alertdialog', { name: 'Delete Photo?' })).getByRole('button', { name: 'Yes, delete' }));
+    expect(await screen.findByText('Photo deleted.')).toBeInTheDocument();
+    expect(writes(calls)).toEqual([['DELETE', '/manage/documents/d1', undefined]]);
+    calls.length = 0;
 
     await userEvent.click(screen.getByRole('button', { name: '+ Add document' }));
     const dialog = screen.getByRole('dialog', { name: 'Add a document' });
@@ -324,8 +333,8 @@ describe('Masters: documents', () => {
     await userEvent.click(within(edit).getByRole('checkbox', { name: /Required/ }));
     await userEvent.click(within(edit).getByRole('button', { name: 'Save' }));
     await screen.findByText('Photo saved.');
-    await userEvent.click(screen.getByRole('switch', { name: 'Photo: active' }));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Photo: active' })).toHaveAttribute('aria-checked', 'false'));
+    await userEvent.click(screen.getByRole('button', { name: 'Deactivate Photo' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Activate Photo' })).toBeInTheDocument());
     expect(writes(calls)).toEqual([
       ['POST', '/manage/documents', { name_en: 'Bank Passbook', required: false, kind: 'DOCUMENT' }],
       ['PATCH', '/manage/documents/d1', { required: false }],
@@ -340,12 +349,19 @@ describe('Masters: form fields', () => {
     renderAt('/manage/masters/fields');
     const step1 = await screen.findByRole('region', { name: 'Step 1 – Basic Details' });
     expect(document.body).not.toHaveTextContent(/core/i);
-    expect(screen.getAllByRole('switch').map((s) => s.getAttribute('aria-label'))).toEqual(FIELDS.map((f) => `${f.label_en}: active`).sort(inOrder));
-    await userEvent.click(within(step1).getByRole('switch', { name: 'First Name: active' }));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'First Name: active' })).toHaveAttribute('aria-checked', 'false'));
+    /* Every field: View, Edit, Activate / Deactivate and Delete, also the program's own. */
+    expect(screen.getAllByRole('button', { name: /^(Activate|Deactivate) / }).map((s) => s.getAttribute('aria-label')!.replace(/^(Activate|Deactivate) /, ''))).toEqual(
+      FIELDS.map((f) => f.label_en).sort(inOrder),
+    );
+    for (const f of FIELDS) {
+      expect(screen.getByRole('button', { name: `View ${f.label_en}` })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: `Delete ${f.label_en}` })).toBeInTheDocument();
+    }
+    await userEvent.click(within(step1).getByRole('button', { name: 'Deactivate First Name' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Activate First Name' })).toBeInTheDocument());
     expect(writes(calls)).toEqual([['PATCH', '/manage/fields/f1', { is_active: false }]]);
     expect(within(step1).getAllByText('Own field')).toHaveLength(2);
-    expect(within(step1).queryByRole('button', { name: 'Delete Gender' })).not.toBeInTheDocument();
+    expect(within(step1).getByRole('button', { name: 'Delete Gender' })).toBeInTheDocument();
     expect(within(step1).getByRole('button', { name: 'Delete Preferred shift' })).toBeInTheDocument();
     /* Where the choices of a dropdown are managed. */
     expect(screen.getByRole('link', { name: 'Choices of Gender' })).toHaveAttribute('href', '/manage/masters/lists/GENDER');
@@ -430,7 +446,7 @@ describe('Masters: form fields', () => {
     await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Required' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByText('Field College Name saved.');
-    await userEvent.click(screen.getByRole('switch', { name: 'Gender: active' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Deactivate Gender' }));
     await waitFor(() => expect(writes(calls)).toHaveLength(3));
     expect(writes(calls)).toEqual([
       ['PATCH', '/manage/fields/f1', { label_en: 'Given Name' }],
@@ -471,7 +487,7 @@ describe('Masters: form fields', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete Preferred shift' }));
     const ask = screen.getByRole('alertdialog', { name: 'Delete Preferred shift?' });
-    expect(ask).toHaveTextContent('Answers already given stay stored.');
+    expect(ask).toHaveTextContent('Answers already given stay stored, and it can be restored from Deleted fields.');
     await userEvent.click(within(ask).getByRole('button', { name: 'Yes, delete' }));
     expect(await screen.findByText('Field Preferred shift deleted.')).toBeInTheDocument();
     expect(writes(calls)).toEqual([
@@ -542,8 +558,8 @@ describe('Masters: districts', () => {
     await userEvent.type(within(dialog).getByLabelText(/^Name/), ' City');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByText('District Pune City saved.');
-    await userEvent.click(screen.getByRole('switch', { name: 'Satara: active' }));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Satara: active' })).toHaveAttribute('aria-checked', 'true'));
+    await userEvent.click(screen.getByRole('button', { name: 'Activate Satara' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Deactivate Satara' })).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: 'Delete Satara' }));
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Yes, delete' }));
     await screen.findByText('District Satara deleted.');
@@ -567,10 +583,11 @@ describe('Masters: a view-only account', () => {
     const calls = mockApi({ role: 'VIEWER' });
     renderAt(path);
     expect(await screen.findByText(text)).toBeInTheDocument();
-    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Activate|Deactivate) / })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add|Edit|Delete|Save/ })).not.toBeInTheDocument();
     /* The fields keep the column for the links to their choices. */
-    expect(screen.queryAllByRole('columnheader', { name: 'Actions' })).toHaveLength(path.endsWith('/fields') ? 2 : 0);
+    /* View is for everyone: every list keeps its Actions column. */
+    expect(screen.queryAllByRole('columnheader', { name: 'Actions' })).toHaveLength(path.endsWith('/fields') ? 2 : 1);
     expect(writes(calls)).toEqual([]);
   });
 
