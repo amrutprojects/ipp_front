@@ -9,6 +9,7 @@ import ManageLoginPage from './pages/manage/ManageLoginPage';
 import CentreDetailPage from './pages/manage/CentreDetailPage';
 import CentreFormPage from './pages/manage/CentreFormPage';
 import CentresPage from './pages/manage/CentresPage';
+import CmsPage from './pages/manage/cms/CmsPage';
 import EditFormPage from './pages/manage/EditFormPage';
 import ManagePage from './pages/manage/ManagePage';
 import DistrictsPage from './pages/manage/masters/DistrictsPage';
@@ -198,6 +199,14 @@ export default function App() {
             element={
               <RequireManage>
                 <SettingsPage />
+              </RequireManage>
+            }
+          />
+          <Route
+            path="/manage/cms/:tab?"
+            element={
+              <RequireManage>
+                <CmsPage />
               </RequireManage>
             }
           />

@@ -4,6 +4,9 @@
  */
 const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || '/api/v1';
 
+/* The full address of an endpoint, for what is not fetched by api() (e.g. an <img> of the landing page's logo). */
+export const apiUrl = (path: string) => `${BASE}/edp${path}`;
+
 export type Realm = 'student' | 'manage';
 const TOKEN_KEY: Record<Realm, string> = { student: 'edp.token', manage: 'edp.manage.token' };
 

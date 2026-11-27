@@ -2194,3 +2194,175 @@ a.btn {
     font-size: 13px;
   }
 }
+
+/* Manage → CMS: the landing page's content. Its tabs (pills, with a dot for unsaved changes or a correction), the save bar
+   that stays in view, the framed parts of a form (a button, a list, its items) and the icon and logo previews. */
+.cms-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cms-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--saffron);
+}
+.cms-dot.wrong {
+  background: var(--red);
+}
+.cms-savebar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.cms-state {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.cms-state.dirty {
+  color: var(--amber);
+}
+.cms-grid {
+  align-items: start;
+}
+.cms-box {
+  margin: 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  min-width: 0;
+}
+.cms-box.invalid {
+  border-color: var(--red);
+}
+.cms-box > legend {
+  padding: 0 6px;
+  font-weight: 700;
+  color: var(--brand-800);
+}
+.cms-box .cms-box {
+  background: var(--surface);
+}
+.cms-box-hint {
+  display: block;
+  margin: 0 0 10px;
+}
+.cms-toggle {
+  align-self: center;
+}
+.cms-checks {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+}
+.cms-empty {
+  margin: 0 0 10px;
+}
+.cms-item {
+  margin: 0 0 12px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.cms-item.off {
+  opacity: 0.75;
+}
+.cms-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cms-item-title {
+  max-width: 420px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cms-item-tools {
+  display: inline-flex;
+  gap: 6px;
+}
+.cms-string {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 8px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+.cms-string .err {
+  grid-column: 1 / -1;
+}
+.cms-icon-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cms-icon-pick .inp {
+  flex: 1;
+  min-width: 0;
+}
+.cms-icon-preview {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--brand-100);
+  color: var(--brand-700);
+}
+.cms-tags {
+  max-width: 260px;
+  color: var(--text-2);
+}
+.cms-logo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+.cms-logo-preview {
+  display: grid;
+  place-items: center;
+  min-width: 220px;
+  min-height: 96px;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  background: #fff;
+}
+.cms-logo-preview img {
+  max-width: 260px;
+  max-height: 80px;
+  object-fit: contain;
+}
+.cms-logo-tools {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 240px;
+}
+.cms-logo-tools .hint {
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .cms-string {
+    grid-template-columns: 1fr;
+  }
+}

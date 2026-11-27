@@ -31,7 +31,10 @@ export function ManageHeader() {
   );
 }
 
-/* Applicants (the student tracking list), Batches, Masters, for an admin Users, and Settings (read-only for a viewer). */
+/*
+ * Applicants (the student tracking list), Batches, Masters, for an admin Users, Settings and CMS (the public landing page);
+ * Settings and CMS are read-only for a viewer.
+ */
 export function ManageNav() {
   const canEdit = useCanEdit();
   /* Center Master keeps its own address, under Masters. */
@@ -47,6 +50,7 @@ export function ManageNav() {
       </NavLink>
       {canEdit ? <NavLink to="/manage/users">Users</NavLink> : null}
       <NavLink to="/manage/settings">Settings</NavLink>
+      <NavLink to="/manage/cms">CMS</NavLink>
     </nav>
   );
 }
