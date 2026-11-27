@@ -11,6 +11,14 @@
     <link rel="icon" href="/sumago-logo-96.png" type="image/png" sizes="96x96" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>3 MONTH INTERNSHIP PLACEMENT PROGRAM</title>
+    <!--
+      The site's home page is the public landing page (public/landing.html, its content from Manage → CMS): opening "/"
+      goes there at once, before the portal loads. Every other address (/login, /register, /manage …) is the portal.
+      With an Nginx rule `location = / { try_files /landing.html =404; }` the server serves it directly instead.
+    -->
+    <script>
+      if (location.pathname === '/') location.replace('/landing.html' + location.search + location.hash);
+    </script>
   </head>
   <body>
     <div id="root"></div>
