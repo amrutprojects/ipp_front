@@ -22,7 +22,7 @@ export const DEFAULT_CHECKS: Record<string, FieldValidation> = {
   taluka: rules(length(100)),
   aadhaar_number: rules({ type: 'aadhaar' }),
   mobile_number: rules({ type: 'indian_mobile' }),
-  alternate_mobile_number: rules({ type: 'indian_mobile' }, { type: 'different_from', value: 'mobile_number' }),
+  alternate_mobile_number: rules({ type: 'indian_mobile' }),
   alternate_email: rules({ type: 'email' }, { type: 'different_from', value: 'email' }),
   disability_type: rules(length(100)),
   disability_certificate_number: {

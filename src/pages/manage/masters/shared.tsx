@@ -42,7 +42,7 @@ export function StatusBadge({ on }: { on: boolean }) {
 }
 
 /*
- * The actions of a row: View for everyone; Edit, Activate / Deactivate and Delete for an ADMIN. An action left out is not
+ * The actions of a row: View for everyone; Edit, Active / Inactive and Delete for an ADMIN. An action left out is not
  * offered (a row that cannot be deleted has no Delete); `children` are a row's own ones (Choices, Restore …).
  */
 export function RowActions({
@@ -66,7 +66,8 @@ export function RowActions({
   children?: ReactNode;
 }) {
   const [busy, setBusy] = useState(false);
-  const verb = active ? 'Deactivate' : 'Activate';
+  /* The status it switches to, in the words of the Status column: an active row offers Inactive, an inactive one Active. */
+  const next = active ? 'Inactive' : 'Active';
   return (
     <div className="row-actions">
       {onView ? (
@@ -83,14 +84,14 @@ export function RowActions({
         <button
           type="button"
           className={active ? 'btn ghost sm' : 'btn sm'}
-          aria-label={`${verb} ${name}`}
+          aria-label={`Make ${name} ${next.toLowerCase()}`}
           disabled={busy}
           onClick={() => {
             setBusy(true);
             void onStatus(!active).finally(() => setBusy(false));
           }}
         >
-          {verb}
+          {next}
         </button>
       ) : null}
       {children}

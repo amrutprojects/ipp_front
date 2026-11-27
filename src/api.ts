@@ -117,15 +117,34 @@ export async function apiAll<T>(path: string, opts: Pick<Options, 'realm' | 'que
   }
 }
 
-/* An authenticated file (the student's own document), opened in a new tab. */
-export async function openFile(path: string, realm: Realm): Promise<void> {
+/* The tab a document opens in: opened at once (a click may open a tab, a later promise may not), saying what it waits for. */
+function openingTab(): Window | null {
   const tab = window.open('', '_blank');
   try {
-    const res = await fetch(`${BASE}/edp${path}`, { headers: { Authorization: `Bearer ${tokens.get(realm) ?? ''}` } });
-    if (!res.ok) throw new Error('Could not open the file');
-    const url = URL.createObjectURL(await res.blob());
-    if (tab) tab.location.href = url;
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    if (tab?.document?.body) {
+      tab.document.title = 'Opening document…';
+      tab.document.body.style.cssText =
+        'margin:0;height:100vh;display:grid;place-items:center;font:15px system-ui,-apple-system,Segoe UI,sans-serif;color:#555;background:#fafafa';
+      tab.document.body.textContent = 'Opening document…';
+    }
+  } catch {
+    /* It still opens the document. */
+  }
+  return tab;
+}
+
+/*
+ * An authenticated document (the student's own, or one of a student for the panel), opened in a new tab. `path` is its
+ * …/documents/:docType/file address: the page asks for a short-lived link to it (…/link, with the session) and the tab goes
+ * there, so the browser shows the document as it arrives instead of a blank tab until the page has fetched all of it.
+ */
+export async function openFile(path: string, realm: Realm): Promise<void> {
+  const tab = openingTab();
+  try {
+    const { data } = await api<{ url: string }>(path.replace(/\/file$/, '/link'), { realm });
+    const url = new URL(data.url, window.location.origin).href;
+    if (tab) tab.location.replace(url);
+    else window.open(url, '_blank', 'noopener');
   } catch (e) {
     tab?.close();
     throw e;

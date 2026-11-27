@@ -20,6 +20,8 @@ const DECLARATION =
   'I hereby declare that all the above information is true to my personal knowledge and belief. Also, these are true copies of the original documents. I am aware that if the said information and documents are found to be false, a case will be registered against me under the Indian Penal Code and/or the relevant law, and I will be liable for punishment accordingly.';
 const STATUS_LABEL: Record<string, string> = {
   SUBMITTED: 'Submitted',
+  /* Finally approved (Head Office, in Sarthi). */
+  APPROVED: 'Approved',
   REGISTRATION_PENDING: 'Received – pending verification',
   RECEIVED: 'Received',
 };

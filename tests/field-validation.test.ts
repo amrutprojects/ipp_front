@@ -1,6 +1,6 @@
 import { checksText, draftIssues, fitting, newCheck, payloadOf, serverIssues, toDraft } from '../src/pages/manage/masters/fieldChecks';
 import { RULE_TYPES, type CustomCheck, type FieldType, type FieldValidation, type Form, type RuleType, type ValidationRule } from '../src/types';
-import { checkFields, checkSaid, chosen, chosenText, regexIssue, rulesOf, wholeMatch, type FieldRule } from '../src/validation';
+import { checkFields, checkSaid, chosen, chosenText, goTogether, regexIssue, rulesOf, wholeMatch, type FieldRule } from '../src/validation';
 
 /* The checks of an own field: how the student's form and the Edit form make them, and how the master's dialog holds them. */
 const TODAY = '2026-11-25';
@@ -253,6 +253,21 @@ describe("The master's dialog: what it holds, sends and reads", () => {
       rules: [{ type: 'min_date', value: '2020-01-01' }],
       custom: [],
     });
+  });
+
+  it('says which checks no answer can keep together, and lets those some answers keep go together', () => {
+    const issues = (...rules: RuleType[]) => draftIssues(toDraft({ rules: rules.map((type) => ({ type })), custom: [] }, 'TEXT'), 'TEXT');
+    expect(issues('letters', 'digits')).toEqual({ 'rule.digits': 'Digits only cannot go with Letters only: no answer can be both' });
+    expect(issues('pin_code', 'no_spaces', 'pan')).toEqual({ 'rule.pan': 'PAN number cannot go with PIN code (6 digits): no answer can be both' });
+    for (const pair of [
+      ['digits', 'indian_mobile'],
+      ['letters_digits', 'pan'],
+      ['digits', 'aadhaar'],
+      ['uppercase', 'ifsc'],
+    ] as RuleType[][])
+      expect(issues(...pair), pair.join('+')).toEqual({});
+    expect(goTogether('email', 'letters_digits')).toBe(false);
+    expect(goTogether('min_length', 'email')).toBe(true);
   });
 
   it('drops what does not fit another type, and keeps the custom checks', () => {

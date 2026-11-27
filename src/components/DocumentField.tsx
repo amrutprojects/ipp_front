@@ -72,6 +72,8 @@ export function DocumentField(props: {
           {rule.short} · max {rule.maxMb}MB
         </span>
       </button>
+      {/* Below the box, together: a row of documents lines up by its labels, boxes and this (styles.css .doc-list). */}
+      <div className="doc-below">
       <input
         ref={inputRef}
         type="file"
@@ -119,6 +121,7 @@ export function DocumentField(props: {
           {props.fileError}
         </span>
       ) : null}
+      </div>
     </div>
   );
 }

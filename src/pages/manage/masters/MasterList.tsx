@@ -157,7 +157,7 @@ export default function MasterList({
     try {
       await api<MasterOption>(`${path}/${encodeURIComponent(r.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list.map((x) => (x.id === r.id ? { ...x, is_active: on } : x)));
-      setDone(`Choice ${r.name_en} ${on ? 'activated' : 'deactivated'}.`);
+      setDone(`Choice ${r.name_en} set to ${on ? 'Active' : 'Inactive'}.`);
       onChanged?.();
     } catch (e) {
       setError(messageOf(e, 'Could not save'));

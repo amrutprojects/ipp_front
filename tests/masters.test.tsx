@@ -221,8 +221,8 @@ describe('Masters: dropdown lists', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Maratha saved.')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Activate Kunbi' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Deactivate Kunbi' })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Make Kunbi active' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Make Kunbi inactive' })).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete Kunbi' }));
     const ask = screen.getByRole('alertdialog', { name: 'Delete Kunbi?' });
@@ -239,9 +239,9 @@ describe('Masters: dropdown lists', () => {
   it('shows why a switch or a delete was refused', async () => {
     mockApi({ write: () => json(409, { message: 'It cannot be changed now' }) });
     renderAt('/manage/masters/lists/CASTE');
-    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate Maratha' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Make Maratha inactive' }));
     expect(await screen.findByText('It cannot be changed now')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Deactivate Maratha' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Make Maratha inactive' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Delete Maratha' }));
     const ask = screen.getByRole('alertdialog', { name: 'Delete Maratha?' });
     await userEvent.click(within(ask).getByRole('button', { name: 'Yes, delete' }));
@@ -333,8 +333,8 @@ describe('Masters: documents', () => {
     await userEvent.click(within(edit).getByRole('checkbox', { name: /Required/ }));
     await userEvent.click(within(edit).getByRole('button', { name: 'Save' }));
     await screen.findByText('Photo saved.');
-    await userEvent.click(screen.getByRole('button', { name: 'Deactivate Photo' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Activate Photo' })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Make Photo inactive' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Make Photo active' })).toBeInTheDocument());
     expect(writes(calls)).toEqual([
       ['POST', '/manage/documents', { name_en: 'Bank Passbook', required: false, kind: 'DOCUMENT' }],
       ['PATCH', '/manage/documents/d1', { required: false }],
@@ -349,16 +349,16 @@ describe('Masters: form fields', () => {
     renderAt('/manage/masters/fields');
     const step1 = await screen.findByRole('region', { name: 'Step 1 – Basic Details' });
     expect(document.body).not.toHaveTextContent(/core/i);
-    /* Every field: View, Edit, Activate / Deactivate and Delete, also the program's own. */
-    expect(screen.getAllByRole('button', { name: /^(Activate|Deactivate) / }).map((s) => s.getAttribute('aria-label')!.replace(/^(Activate|Deactivate) /, ''))).toEqual(
+    /* Every field: View, Edit, Active / Inactive and Delete, also the program's own. */
+    expect(screen.getAllByRole('button', { name: /^Make .+ (active|inactive)$/ }).map((s) => s.getAttribute('aria-label')!.replace(/^Make (.+) (active|inactive)$/, '$1'))).toEqual(
       FIELDS.map((f) => f.label_en).sort(inOrder),
     );
     for (const f of FIELDS) {
       expect(screen.getByRole('button', { name: `View ${f.label_en}` })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: `Delete ${f.label_en}` })).toBeInTheDocument();
     }
-    await userEvent.click(within(step1).getByRole('button', { name: 'Deactivate First Name' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Activate First Name' })).toBeInTheDocument());
+    await userEvent.click(within(step1).getByRole('button', { name: 'Make First Name inactive' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Make First Name active' })).toBeInTheDocument());
     expect(writes(calls)).toEqual([['PATCH', '/manage/fields/f1', { is_active: false }]]);
     expect(within(step1).getAllByText('Own field')).toHaveLength(2);
     expect(within(step1).getByRole('button', { name: 'Delete Gender' })).toBeInTheDocument();
@@ -446,7 +446,7 @@ describe('Masters: form fields', () => {
     await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Required' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByText('Field College Name saved.');
-    await userEvent.click(screen.getByRole('button', { name: 'Deactivate Gender' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Make Gender inactive' }));
     await waitFor(() => expect(writes(calls)).toHaveLength(3));
     expect(writes(calls)).toEqual([
       ['PATCH', '/manage/fields/f1', { label_en: 'Given Name' }],
@@ -558,8 +558,8 @@ describe('Masters: districts', () => {
     await userEvent.type(within(dialog).getByLabelText(/^Name/), ' City');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByText('District Pune City saved.');
-    await userEvent.click(screen.getByRole('button', { name: 'Activate Satara' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Deactivate Satara' })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Make Satara active' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Make Satara inactive' })).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: 'Delete Satara' }));
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Yes, delete' }));
     await screen.findByText('District Satara deleted.');
@@ -583,7 +583,7 @@ describe('Masters: a view-only account', () => {
     const calls = mockApi({ role: 'VIEWER' });
     renderAt(path);
     expect(await screen.findByText(text)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^(Activate|Deactivate) / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Make .+ (active|inactive)$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add|Edit|Delete|Save/ })).not.toBeInTheDocument();
     /* The fields keep the column for the links to their choices. */
     /* View is for everyone: every list keeps its Actions column. */

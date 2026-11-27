@@ -20,9 +20,9 @@ const LIMIT = 25;
 
 /* What deleting a center means, asked before it is done (also on the center's own page). */
 export const CENTRE_DELETE_NOTE =
-  'It is no longer offered. A center that students or batches use cannot be deleted; deactivate it instead.';
+  'It is no longer offered. A center that students or batches use cannot be deleted; set it to Inactive instead.';
 
-/* Center Master list: search, district and status filters, pages; view / edit / activate / deactivate / delete. */
+/* Center Master list: search, district and status filters, pages; view / edit / Active / Inactive / delete. */
 export default function CentresPage() {
   const location = useLocation();
   const canEdit = useCanEdit();
@@ -190,9 +190,9 @@ export default function CentresPage() {
                             type="button"
                             className={c.isActive ? 'btn danger sm' : 'btn sm'}
                             onClick={() => setToggling(c)}
-                            aria-label={`${c.isActive ? 'Deactivate' : 'Activate'} ${c.name}`}
+                            aria-label={`Make ${c.name} ${c.isActive ? 'inactive' : 'active'}`}
                           >
-                            {c.isActive ? 'Deactivate' : 'Activate'}
+                            {c.isActive ? 'Inactive' : 'Active'}
                           </button>
                           <button
                             type="button"

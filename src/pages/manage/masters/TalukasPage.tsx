@@ -176,7 +176,7 @@ export default function TalukasPage() {
     try {
       await api(`/manage/talukas/${encodeURIComponent(r.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list.map((x) => (x.id === r.id ? { ...x, is_active: on } : x)));
-      setDone(`Taluka ${r.name} ${on ? 'activated' : 'deactivated'}.`);
+      setDone(`Taluka ${r.name} set to ${on ? 'Active' : 'Inactive'}.`);
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
     }

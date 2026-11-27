@@ -9,7 +9,7 @@ import CentreStatusDialog from './CentreStatusDialog';
 import { MastersShell } from './ManageLayout';
 import { ConfirmDelete } from './masters/shared';
 
-/* One centre, read-only, with Edit, Activate / Deactivate and Delete for an admin. */
+/* One centre, read-only, with Edit, Active / Inactive and Delete for an admin. */
 export default function CentreDetailPage() {
   const { id = '' } = useParams();
   const location = useLocation();
@@ -71,8 +71,13 @@ export default function CentreDetailPage() {
                 <Link className="btn ghost sm" to={`/manage/centres/${centre.id}/edit`}>
                   Edit
                 </Link>
-                <button type="button" className={centre.isActive ? 'btn danger sm' : 'btn sm'} onClick={() => setToggling(true)}>
-                  {centre.isActive ? 'Deactivate' : 'Activate'}
+                <button
+                  type="button"
+                  className={centre.isActive ? 'btn danger sm' : 'btn sm'}
+                  aria-label={`Make ${centre.name} ${centre.isActive ? 'inactive' : 'active'}`}
+                  onClick={() => setToggling(true)}
+                >
+                  {centre.isActive ? 'Inactive' : 'Active'}
                 </button>
                 <button
                   type="button"
@@ -119,7 +124,7 @@ export default function CentreDetailPage() {
           onDone={(updated) => {
             setToggling(false);
             setCentre(updated);
-            setFlash(updated.isActive ? 'Center activated.' : 'Center deactivated.');
+            setFlash(updated.isActive ? 'Center set to Active.' : 'Center set to Inactive.');
           }}
         />
       ) : null}

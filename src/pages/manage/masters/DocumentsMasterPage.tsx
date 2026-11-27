@@ -118,7 +118,7 @@ export default function DocumentsMasterPage() {
     try {
       await api(`/manage/documents/${encodeURIComponent(r.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list?.map((x) => (x.id === r.id ? { ...x, is_active: on } : x)) ?? null);
-      setDone(`Document ${r.name_en} ${on ? 'activated' : 'deactivated'}.`);
+      setDone(`Document ${r.name_en} set to ${on ? 'Active' : 'Inactive'}.`);
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
     }

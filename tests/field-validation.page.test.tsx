@@ -407,14 +407,20 @@ describe('Form fields: validation', () => {
     await userEvent.type(within(dialog).getByLabelText(/Label \(English\)/), 'Roll');
     await userEvent.type(within(dialog).getByLabelText('Minimum characters'), '3');
     await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Digits only' }));
-    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Letters only' }));
+    /* No answer is digits only and letters only: that one cannot be ticked with it. */
+    expect(within(dialog).getByRole('checkbox', { name: 'Letters only' })).toBeDisabled();
+    /* So are a PAN, an IFSC code and an e-mail address. */
+    for (const name of ['PAN number', 'IFSC code', 'Email address']) expect(within(dialog).getByRole('checkbox', { name })).toBeDisabled();
+    expect(within(dialog).getAllByText('Cannot go with Digits only')).toHaveLength(4);
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Capital letters only' }));
     await userEvent.selectOptions(typeBox(dialog), 'TEXTAREA');
-    expect(within(dialog).getByRole('checkbox', { name: 'Letters only' })).toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Capital letters only' })).toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Letters only' })).toBeEnabled();
     await userEvent.selectOptions(typeBox(dialog), 'NUMBER');
     await userEvent.type(within(dialog).getByLabelText('Maximum value'), '7');
     await userEvent.selectOptions(typeBox(dialog), 'TEXT');
     /* Dropped, not only hidden. */
-    for (const name of ['Digits only', 'Letters only']) expect(within(dialog).getByRole('checkbox', { name })).not.toBeChecked();
+    for (const name of ['Digits only', 'Capital letters only']) expect(within(dialog).getByRole('checkbox', { name })).not.toBeChecked();
     expect(within(dialog).getByLabelText('Minimum characters')).toHaveValue('');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
     await screen.findByText('Field Roll added.');

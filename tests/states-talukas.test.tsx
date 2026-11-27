@@ -150,8 +150,8 @@ describe('Masters: states', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('State Maharashtra saved.')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Activate Goa' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Deactivate Goa' })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Make Goa active' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Make Goa inactive' })).toBeInTheDocument());
     expect(writes(calls)).toEqual([
       ['PATCH', '/manage/states/s2', { code: 'GOA' }],
       ['PATCH', '/manage/states/s2', { is_active: true }],
@@ -159,7 +159,7 @@ describe('Masters: states', () => {
   });
 
   it('deletes a state after asking, and says why when the API refuses', async () => {
-    const refusal = 'This state cannot be deleted while 36 districts reference it. Deactivate it instead, or move or delete the districts first.';
+    const refusal = 'This state cannot be deleted while 36 districts reference it. Set it to Inactive instead, or move or delete the districts first.';
     const calls = mockApi({ write: (_m, path) => (path.endsWith('/s1') ? json(409, { message: refusal }) : undefined) });
     renderAt('/manage/masters/states');
     await userEvent.click(await screen.findByRole('button', { name: 'Delete Maharashtra' }));
@@ -184,9 +184,9 @@ describe('Masters: states', () => {
     let list: Response | undefined;
     mockApi({ states: () => list ?? json(200, { data: STATES }), write: () => json(403, { message: 'Your account can only view.' }) });
     const { unmount } = renderAt('/manage/masters/states');
-    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate Maharashtra' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Make Maharashtra inactive' }));
     expect(await screen.findByText('Your account can only view.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Deactivate Maharashtra' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Make Maharashtra inactive' })).toBeInTheDocument();
     unmount();
     list = json(500, { message: 'Something went wrong' });
     renderAt('/manage/masters/states');
@@ -366,11 +366,11 @@ describe('Masters: talukas', () => {
   });
 
   it('switches a taluka on and off, and deletes one after asking; a refusal is shown', async () => {
-    const refusal = 'This taluka cannot be deleted while 2 centers reference it. Deactivate it instead, or remove those records first.';
+    const refusal = 'This taluka cannot be deleted while 2 centers reference it. Set it to Inactive instead, or remove those records first.';
     const calls = mockApi({ write: (method, path) => (method === 'DELETE' && path.endsWith('/t1') ? json(409, { message: refusal }) : undefined) });
     renderAt('/manage/masters/talukas');
-    await userEvent.click(await screen.findByRole('button', { name: 'Activate Haveli' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Deactivate Haveli' })).toBeInTheDocument());
+    await userEvent.click(await screen.findByRole('button', { name: 'Make Haveli active' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Make Haveli inactive' })).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete Baramati' }));
     let ask = screen.getByRole('alertdialog', { name: 'Delete Baramati?' });
@@ -415,7 +415,7 @@ describe('States and talukas: a view-only account', () => {
     renderAt(path);
     expect(await screen.findByText(text)).toBeInTheDocument();
     expect(screen.getByText(VIEW_ONLY)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^(Activate|Deactivate) / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Make .+ (active|inactive)$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add|Edit|Delete|Save/ })).not.toBeInTheDocument();
     /* View is for everyone: the Actions column stays, with View only. */
     expect(within(row(new RegExp(text))).getByRole('button', { name: `View ${text}` })).toBeInTheDocument();

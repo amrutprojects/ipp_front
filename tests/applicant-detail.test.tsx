@@ -156,6 +156,8 @@ function mockApi(
     if (url.includes('/manage/applicants?')) return json(200, { data: [row], meta: { page: 1, limit: 25, total: 1, totalPages: 1 } });
     if (url.endsWith('/follow-ups')) return json(200, { data: [] });
     if (url.endsWith('/file')) return new Response(new Blob(['jpeg']), { status: 200 });
+    /* A short-lived link the tab opens (src/api.ts openFile). */
+    if (url.endsWith('/link')) return json(200, { data: { url: '/api/v1/edp/files/token-photo', expires_at: '2026-11-27T10:02:00Z' } });
     if (url.endsWith('/file?download=1'))
       return new Response(new Blob(['jpeg']), {
         status: 200,
@@ -250,10 +252,8 @@ describe('Tracking panel: one student', () => {
 
   it('lists the documents, marks the mandatory ones, and opens a file from the manage API', async () => {
     const calls = mockApi(() => json(200, { data: detail() }));
-    const tab = { location: { href: '' }, close: vi.fn() };
+    const tab = { location: { replace: vi.fn() }, close: vi.fn(), document: document.implementation.createHTMLDocument('') };
     vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-    URL.createObjectURL = vi.fn(() => 'blob:photo');
-    URL.revokeObjectURL = vi.fn();
     renderAt(`/manage/applicants/${ID}`);
     const docs = await screen.findByRole('region', { name: 'Documents' });
     const photo = within(docs).getByRole('row', { name: /Photo/ });
@@ -266,8 +266,11 @@ describe('Tracking panel: one student', () => {
     expect(within(docs).getByRole('row', { name: /PAN Card/ })).toHaveTextContent('PAN Card *Not uploaded');
 
     await userEvent.click(within(docs).getByRole('button', { name: 'View Photo' }));
-    await waitFor(() => expect(calls.some((u) => u.endsWith(`/manage/applicants/${ID}/documents/PHOTO/file`))).toBe(true));
-    await waitFor(() => expect(tab.location.href).toBe('blob:photo'));
+    /* The tab says what it waits for, then opens the document's short-lived link: the browser shows it as it arrives. */
+    expect(tab.document.body.textContent).toBe('Opening document…');
+    await waitFor(() => expect(calls.some((u) => u.endsWith(`/manage/applicants/${ID}/documents/PHOTO/link`))).toBe(true));
+    await waitFor(() => expect(tab.location.replace).toHaveBeenCalledWith(`${window.location.origin}/api/v1/edp/files/token-photo`));
+    expect(calls.some((u) => u.endsWith('/documents/PHOTO/file'))).toBe(false);
   });
 
   it('downloads one document under the candidate name, and all documents as one ZIP', async () => {

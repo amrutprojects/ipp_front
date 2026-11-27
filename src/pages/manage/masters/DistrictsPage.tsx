@@ -111,7 +111,7 @@ export default function DistrictsPage() {
     try {
       await api(`/manage/districts/${encodeURIComponent(d.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list?.map((x) => (x.id === d.id ? { ...x, is_active: on } : x)) ?? null);
-      setDone(`District ${d.name} ${on ? 'activated' : 'deactivated'}.`);
+      setDone(`District ${d.name} set to ${on ? 'Active' : 'Inactive'}.`);
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
     }

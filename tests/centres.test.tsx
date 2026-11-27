@@ -102,9 +102,9 @@ describe('Center Master (tracking panel)', () => {
     expect(screen.getByRole('link', { name: 'Masters' })).toHaveClass('active');
     expect(calls.find((c) => c.url.includes('/manage/centres?'))!.auth).toBe('Bearer manage-token');
 
-    await userEvent.click(await within(row).findByRole('button', { name: 'Deactivate Baramati Centre' }));
-    const dialog = screen.getByRole('alertdialog', { name: 'Deactivate Baramati Centre?' });
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, deactivate' }));
+    await userEvent.click(await within(row).findByRole('button', { name: 'Make Baramati Centre inactive' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Set Baramati Centre to Inactive?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, set to Inactive' }));
     await waitFor(() => expect(screen.getByRole('row', { name: /Baramati Centre/ })).toHaveTextContent('Inactive'));
     expect(calls.find((c) => c.url.endsWith('/status'))!.body).toEqual({ isActive: false });
   });

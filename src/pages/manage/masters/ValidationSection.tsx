@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../../api';
 import { Field } from '../../../components/ui';
 import type { CustomCheck, FieldType, FieldValidation, RuleType } from '../../../types';
-import { limitOf, OWN_TEXTAREA_MAX } from '../../../validation';
+import { goTogether, limitOf, OWN_TEXTAREA_MAX } from '../../../validation';
 import {
   CHECK_LABEL,
   checksOf,
@@ -144,25 +144,37 @@ function Checks({ v, type }: { v: Validation; type: FieldType }) {
     <fieldset className="field radios">
       <legend className="label">Checks</legend>
       <div className="val-checks">
-        {checks.map((t) => (
-          <div key={t}>
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={v.draft.ticked.includes(t)}
-                onChange={(e) => toggle(t, e.target.checked)}
-                aria-describedby={v.issues[`rule.${t}`] ? `val-${t}-err` : undefined}
-              />
-              {CHECK_LABEL[t]}
-            </label>
-            {v.issues[`rule.${t}`] ? (
-              <span className="err" role="alert" id={`val-${t}-err`}>
-                {' '}
-                {v.issues[`rule.${t}`]}
-              </span>
-            ) : null}
-          </div>
-        ))}
+        {checks.map((t) => {
+          /* A check no answer can keep together with one already ticked (letters only and digits only…) cannot be ticked. */
+          const ticked = v.draft.ticked.includes(t);
+          const clash = ticked ? undefined : v.draft.ticked.find((o) => !goTogether(o, t));
+          return (
+            <div key={t}>
+              <label className="check-row" title={clash ? `Cannot go with ${CHECK_LABEL[clash]}` : undefined}>
+                <input
+                  type="checkbox"
+                  checked={ticked}
+                  disabled={!!clash}
+                  onChange={(e) => toggle(t, e.target.checked)}
+                  aria-describedby={v.issues[`rule.${t}`] ? `val-${t}-err` : clash ? `val-${t}-clash` : undefined}
+                />
+                {CHECK_LABEL[t]}
+              </label>
+              {clash && !v.issues[`rule.${t}`] ? (
+                <span className="hint" id={`val-${t}-clash`}>
+                  {' '}
+                  Cannot go with {CHECK_LABEL[clash]}
+                </span>
+              ) : null}
+              {v.issues[`rule.${t}`] ? (
+                <span className="err" role="alert" id={`val-${t}-err`}>
+                  {' '}
+                  {v.issues[`rule.${t}`]}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </fieldset>
   );

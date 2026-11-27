@@ -244,19 +244,19 @@ describe('View-only accounts (VIEWER)', () => {
     expect(within(row).getByRole('link', { name: 'View Baramati Centre' })).toBeInTheDocument();
     expect(screen.getByText('View only')).toBeInTheDocument();
     expect(within(row).queryByRole('link', { name: 'Edit Baramati Centre' })).not.toBeInTheDocument();
-    expect(within(row).queryByRole('button', { name: /Deactivate|Activate/ })).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /^Make Baramati Centre (in)?active$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '+ Add center' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Applicants' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Center Master' })).toBeInTheDocument();
   });
 
-  it('a center opens read-only, without Edit or Deactivate', async () => {
+  it('a center opens read-only, without Edit or Active / Inactive', async () => {
     mockApi({ role: 'VIEWER' });
     renderAt('/manage/centres/c1');
     expect(await screen.findByRole('heading', { name: 'Baramati Centre' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Edit' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Deactivate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Make Baramati Centre (in)?active$/ })).not.toBeInTheDocument();
   });
 
   it('is sent away from the add / edit center pages and from Users', async () => {
@@ -291,9 +291,9 @@ describe('View-only accounts (VIEWER)', () => {
     mockApi({ centreStatus: () => json(403, { message: VIEW_ONLY }) });
     renderAt('/manage/centres');
     const row = await screen.findByRole('row', { name: /Baramati Centre/ });
-    await userEvent.click(await within(row).findByRole('button', { name: 'Deactivate Baramati Centre' }));
-    const dialog = screen.getByRole('alertdialog', { name: 'Deactivate Baramati Centre?' });
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, deactivate' }));
+    await userEvent.click(await within(row).findByRole('button', { name: 'Make Baramati Centre inactive' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Set Baramati Centre to Inactive?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, set to Inactive' }));
     expect(await within(dialog).findByText(VIEW_ONLY)).toBeInTheDocument();
   });
 });

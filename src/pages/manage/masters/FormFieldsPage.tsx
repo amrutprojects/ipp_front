@@ -397,7 +397,7 @@ export default function FormFieldsPage() {
     try {
       await api(`/manage/fields/${encodeURIComponent(f.id)}`, { method: 'PATCH', realm: 'manage', body: { is_active: on } });
       setRows((list) => list?.map((x) => (x.id === f.id ? { ...x, is_active: on } : x)) ?? null);
-      setDone(`Field ${f.label_en} ${on ? 'activated: it is asked on the form' : 'deactivated: it is no longer asked'}.`);
+      setDone(`Field ${f.label_en} set to ${on ? 'Active: it is asked on the form' : 'Inactive: it is no longer asked'}.`);
     } catch (e) {
       setError(messageOf(e, 'Could not save'));
     }
@@ -408,7 +408,7 @@ export default function FormFieldsPage() {
     setError('');
     try {
       await api(`/manage/fields/${encodeURIComponent(f.id)}/restore`, { method: 'POST', realm: 'manage' });
-      changed(`Field ${f.label_en} restored. It is off: activate it to ask it again.`);
+      changed(`Field ${f.label_en} restored. It is Inactive: set it to Active to ask it again.`);
     } catch (e) {
       setError(messageOf(e, 'Could not restore'));
     }

@@ -184,11 +184,34 @@ button {
     padding: 18px;
   }
 }
-.field {
+.field,
+.field-body {
   display: flex;
   flex-direction: column;
   gap: 5px;
   min-width: 0;
+}
+/* A long choice shown in a closed dropdown ends in "…" instead of widening it. */
+select.inp {
+  text-overflow: ellipsis;
+}
+/*
+ * The student's form: the fields side by side line up. Each field takes two rows of the grid, shared with the one beside it
+ * (subgrid): its label, at the bottom of the first so a short label sits on its box, then its box with the note under it. A
+ * label that wraps to two lines moves the boxes of the whole row down together; an error under one box moves nothing.
+ */
+@supports (grid-template-rows: subgrid) {
+  .grid.aligned > :not(.wide) {
+    grid-row: span 2;
+  }
+  .grid.aligned > div.field:not(.wide) {
+    display: grid;
+    grid-template-rows: subgrid;
+    row-gap: 5px;
+  }
+  .grid.aligned > div.field:not(.wide) > label {
+    align-self: end;
+  }
 }
 .field label,
 .label {
@@ -547,7 +570,8 @@ table.tbl {
 /* Stats (tracking panel) */
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  /* Seven cards (All students … Form submitted, Final Approved Students) fit one row on a desktop. */
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -1873,18 +1897,38 @@ a.btn {
   gap: 18px 20px;
   margin-top: 8px;
 }
-.doc-field {
+.doc-field,
+.doc-below {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
+/*
+ * The documents of a row line up whatever their names: each takes three rows of the grid, shared with the ones beside it
+ * (subgrid) — its name (at the bottom of the first, so a short name sits on its box), its box, then what goes below it
+ * (View / Replace / Remove, the accepted formats, an error). A name on two lines moves the boxes of the whole row together.
+ */
+@supports (grid-template-rows: subgrid) {
+  .doc-list > .doc-field {
+    display: grid;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    row-gap: 6px;
+  }
+  .doc-list > .doc-field > .label {
+    align-self: end;
+  }
+}
 .dropzone {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 3px;
   width: 100%;
+  /* As high with a file (its name, size, prompt and formats) as without one. */
+  min-height: 112px;
   padding: 14px 12px;
   border: 1.5px dashed var(--border-strong);
   border-radius: 10px;

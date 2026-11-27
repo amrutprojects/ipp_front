@@ -37,13 +37,23 @@ describe('new registration fields', () => {
     expect(checkFields({ ...base, pin_code: '0' } as Form, [rule('pin_code', { validation: null })])).toEqual({});
   });
 
-  it('alternate mobile and email are optional, but valid and different when given', () => {
+  it('alternate mobile and email are optional, but valid when given; the e-mail different, the mobile may be the same', () => {
     const f = [
       rule('alternate_mobile_number', { required: false, other: { key: 'mobile_number', label: 'Mobile Number' } }),
       rule('alternate_email', { required: false, other: { key: 'email', label: 'Email' } }),
     ];
     expect(checkFields(base, f)).toEqual({});
-    expect(checkFields({ ...base, alternate_mobile_number: '9765412345' }, f).alternate_mobile_number).toMatch(/different/);
+    /* The WhatsApp number may be the mobile number: it has no "different from" check any more (ipp_backend migration 0011). */
+    expect(checkFields({ ...base, alternate_mobile_number: '9765412345' }, f)).toEqual({});
+    /* Given that check by an ADMIN, it is kept. */
+    const differing = [
+      rule('alternate_mobile_number', {
+        required: false,
+        other: { key: 'mobile_number', label: 'Mobile Number' },
+        validation: { rules: [{ type: 'indian_mobile' }, { type: 'different_from', value: 'mobile_number' }], custom: [] },
+      }),
+    ];
+    expect(checkFields({ ...base, alternate_mobile_number: '9765412345' }, differing).alternate_mobile_number).toMatch(/different/);
     expect(checkFields({ ...base, alternate_mobile_number: '+91 98220 12345' }, f)).toEqual({});
     expect(checkFields({ ...base, alternate_mobile_number: '12345' }, f).alternate_mobile_number).toMatch(/10-digit/);
     expect(checkFields({ ...base, alternate_email: 'KAVYA@example.com' }, f).alternate_email).toMatch(/different/);

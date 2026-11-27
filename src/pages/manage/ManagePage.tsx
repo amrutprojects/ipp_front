@@ -315,6 +315,15 @@ export default function ManagePage() {
                 <span>{s.label}</span>
               </button>
             ))}
+            {/* Finally approved (Head Office in Sarthi, or the Super Admin): next to Form submitted, it shows only those. */}
+            <button
+              className={stage === 'APPROVED' ? 'stat on' : 'stat'}
+              onClick={() => changeFilters({ stage: 'APPROVED' })}
+              aria-pressed={stage === 'APPROVED'}
+            >
+              <b>{summary.approvals?.APPROVED ?? 0}</b>
+              <span>Final Approved Students</span>
+            </button>
           </div>
         ) : null}
         <StudentFilters
@@ -471,7 +480,24 @@ export default function ManagePage() {
                         <Link className="btn ghost sm" to={`/manage/applicants/${encodeURIComponent(r.id)}`} aria-label={`View ${r.name}`}>
                           View
                         </Link>
-                        {canEdit ? <button type="button" className="btn ghost sm" aria-label={`Delete ${r.name}`} onClick={() => setDeleting(r)}>Delete</button> : null}
+                        {canEdit ? (
+                          /* Not once the Auditor has approved the form, at any later stage too (the API refuses it as well). */
+                          (r as typeof r & { can_delete?: boolean }).can_delete === false ? (
+                            <button
+                              type="button"
+                              className="btn ghost sm locked"
+                              aria-label={`Delete ${r.name}`}
+                              disabled
+                              title="Approved by the Auditor: it can no longer be deleted"
+                            >
+                              Delete
+                            </button>
+                          ) : (
+                            <button type="button" className="btn ghost sm" aria-label={`Delete ${r.name}`} onClick={() => setDeleting(r)}>
+                              Delete
+                            </button>
+                          )
+                        ) : null}
                         {canEdit && r.can_approve ? (
                           <button
                             type="button"

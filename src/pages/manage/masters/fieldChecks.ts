@@ -1,5 +1,5 @@
 import type { CustomCheck, FieldType, FieldValidation, RuleType, ValidationRule } from '../../../types';
-import { limitOf, OWN_TEXTAREA_MAX, OWN_TEXT_MAX, realDate, regexIssue, rulesOf, TIME_RE, YEAR_MAX, YEAR_MIN } from '../../../validation';
+import { goTogether, limitOf, OWN_TEXTAREA_MAX, OWN_TEXT_MAX, realDate, regexIssue, rulesOf, TIME_RE, YEAR_MAX, YEAR_MIN } from '../../../validation';
 
 /*
  * The validation of a field as its dialog holds it (ValidationSection.tsx): the limits typed, the checks ticked and the
@@ -183,6 +183,11 @@ export function draftIssues(d: ValidationDraft, type: FieldType, half: RuleType[
     if (!from || !to || e[`rule.${min}`] || e[`rule.${max}`]) continue;
     if (limitOf(max) === 'number' ? Number(from) > Number(to) : from > to) e[`rule.${max}`] = 'The maximum is smaller than the minimum';
   }
+  /* Two checks no answer can keep together (one saved before this rule existed): said at the later one, as the API does. */
+  d.ticked.forEach((t, i) => {
+    const before = d.ticked.slice(0, i).find((o) => !goTogether(o, t));
+    if (before) e[`rule.${t}`] = `${CHECK_LABEL[t]} cannot go with ${CHECK_LABEL[before]}: no answer can be both`;
+  });
   for (const c of d.custom) {
     if (!c.source.trim()) e[`check.${c.id}.source`] = c.kind === 'JS' ? 'Enter the function' : 'Enter the regular expression';
     else if (c.kind === 'REGEX') {

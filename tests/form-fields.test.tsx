@@ -315,6 +315,30 @@ describe('No field is fixed', () => {
   const only = (...keys: string[]) => withFields((f) => (keys.includes(f.key) ? f : null));
   const saves = (calls: ReturnType<typeof mockApi>) => calls.filter((c) => c.method === 'PUT');
 
+  it("a dropdown with a long label or a question says only \"Select an option\", so the open list stays the form's width", async () => {
+    const question = 'Do you belong to one of the four eligible categories?(Maratha,Kunbi-Maratha,Maratha-Kunbi,Kunbi)';
+    const long = 'The shift you would like to attend the classes in';
+    mockApi(
+      draft(),
+      withFields((f) =>
+        f.key === 'religion'
+          ? { ...f, label_en: question, label_mr: 'आपण पात्र प्रवर्गांपैकी आहात का?' }
+          : f.key === 'x_shift'
+            ? { ...f, label_en: long, label_mr: null }
+            : f,
+      ),
+    );
+    await renderFresh();
+    await screen.findByRole('heading', { name: 'Step 1 of 3 – Basic Details' });
+    expect(choices(/^Do you belong/)).toEqual(['Select an option', 'हिंदू', 'Other']);
+    expect(choices(/^The shift you would like/)).toEqual(['Select an option', 'Morning', 'Evening']);
+    /* A short label is still named: "Select Caste". */
+    expect(choices(/^Caste/)).toEqual(['Select Caste', 'मराठा']);
+    await userEvent.click(screen.getByRole('button', { name: 'मराठी' }));
+    expect(choices(/^आपण पात्र प्रवर्गांपैकी/)[0]).toBe('पर्याय निवडा');
+    expect(choices(/^जात/)[0]).toBe('जात निवडा');
+  });
+
   it('every field of a step can be off: the step says so and goes on', async () => {
     const calls = mockApi(draft(), only('landmark'));
     await renderFresh();

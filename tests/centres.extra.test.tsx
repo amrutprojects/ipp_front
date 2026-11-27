@@ -5,8 +5,8 @@ import App from '../src/App';
 import type { Centre, ManageRole } from '../src/types';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-const NOTE = 'It is no longer offered. A center that students or batches use cannot be deleted; deactivate it instead.';
-const REFUSAL = 'This center is used by student applications or registrations. Deactivate it instead.';
+const NOTE = 'It is no longer offered. A center that students or batches use cannot be deleted; set it to Inactive instead.';
+const REFUSAL = 'This center is used by student applications or registrations. Set it to Inactive instead.';
 
 const centre = (over: Partial<Centre> = {}): Centre => ({
   id: 'c1',
@@ -154,7 +154,7 @@ describe('Center Master: list', () => {
     await screen.findByRole('row', { name: /Baramati Centre/ });
     expect(screen.getByText('View only: your account can see the masters but not change them.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View Baramati Centre' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Delete|Deactivate|Activate/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Delete|^Make .+ (active|inactive)$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Edit|Add/ })).not.toBeInTheDocument();
   });
 
@@ -196,6 +196,6 @@ describe('Center Master: one center', () => {
     mockApi({ role: 'VIEWER' });
     renderAt('/manage/centres/c1');
     expect(await screen.findByRole('heading', { name: 'Baramati Centre' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Delete|Deactivate/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Delete|^Make .+ inactive$/ })).not.toBeInTheDocument();
   });
 });

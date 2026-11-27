@@ -60,16 +60,19 @@ export function Field({
       <label htmlFor={id}>
         {label} {required ? <span className="req">*</span> : null}
       </label>
-      {control}
-      {error ? (
-        <span className="err" role="alert" id={`${id}-err`}>
-          {error}
-        </span>
-      ) : hint ? (
-        <span className="hint" id={`${id}-hint`}>
-          {hint}
-        </span>
-      ) : null}
+      {/* The box and its note together: in a form whose rows line up (styles.css .grid.aligned) they share one row. */}
+      <div className="field-body">
+        {control}
+        {error ? (
+          <span className="err" role="alert" id={`${id}-err`}>
+            {error}
+          </span>
+        ) : hint ? (
+          <span className="hint" id={`${id}-hint`}>
+            {hint}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -236,6 +236,29 @@ const NOT_ONE_CHOICE = new Set<FieldType>(['CHECKBOXES', 'YES_NO', 'CONSENT']);
 
 /* ---------- The checks of a field (Masters → Form fields → Validation) ---------- */
 
+/*
+ * What an answer is made of, and which of these go together on one field (as ipp_backend program/validation.ts): some answers
+ * are both (a mobile number is digits only, a PAN letters and digits), others never are (letters only and digits only, a PIN
+ * code and a PAN, an e-mail and anything else). A field cannot have two that no answer keeps: it could never be filled in.
+ */
+const FORMAT_RULES = ['letters', 'digits', 'letters_digits', 'pin_code', 'pan', 'ifsc', 'email', 'indian_mobile', 'aadhaar'] as const;
+type FormatRule = (typeof FORMAT_RULES)[number];
+const GOES_WITH: Record<FormatRule, readonly FormatRule[]> = {
+  letters: ['letters_digits'],
+  digits: ['letters_digits', 'pin_code', 'indian_mobile', 'aadhaar'],
+  letters_digits: ['letters', 'digits', 'pin_code', 'pan', 'ifsc', 'indian_mobile', 'aadhaar'],
+  pin_code: ['digits', 'letters_digits'],
+  pan: ['letters_digits'],
+  ifsc: ['letters_digits'],
+  email: [],
+  indian_mobile: ['digits', 'letters_digits'],
+  aadhaar: ['digits', 'letters_digits'],
+};
+const isFormatRule = (t: RuleType): t is FormatRule => (FORMAT_RULES as readonly string[]).includes(t);
+/* Whether some answer can keep both rules (any two that are not both about what an answer is made of can). */
+export const goTogether = (a: RuleType, b: RuleType): boolean =>
+  !isFormatRule(a) || !isFormatRule(b) || a === b || GOES_WITH[a].includes(b);
+
 /* The rules that fit a type of field, in the order they are checked. */
 const RULES_BY_TYPE: Partial<Record<FieldType, readonly RuleType[]>> = {
   TEXT: [

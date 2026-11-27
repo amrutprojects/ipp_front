@@ -109,6 +109,8 @@ export function useFocusWrong() {
  * (unknown) fields come last.
  */
 const COURSE = ['region_id', 'centre_id', 'technology', 'education_id'];
+/* The longest label a dropdown's empty choice repeats ("Select Educational Status"); a longer one says "Select an option". */
+export const PLACEHOLDER_LABEL_MAX = 30;
 const QUALIFICATION: readonly string[] = MAIN_FIELDS.filter((k) => !COURSE.includes(k));
 function groupsOf(step: number, defs: FieldDef[], T: FormModel['T']): { title: string; fields: FieldDef[] }[] {
   const known = defs.filter((f) => isKnown(f.key) && !f.custom);
@@ -180,7 +182,16 @@ export function StepFields({
       ? [...list, { value: saved.value, label: `${saved.text || saved.value} (no longer offered)` }]
       : list;
   };
-  const select = (f: FieldDef, placeholder = T(`${f.label} निवडा`, `Select ${f.label}`)) => (
+  /*
+   * A dropdown's empty choice: "Select <label>" while the label is short. A long label or a question (e.g. "Do you belong to
+   * one of the four eligible categories?(…)") would read oddly and make the open list wider than the form, so it says only
+   * "Select an option" then.
+   */
+  const pickOne = (f: FieldDef) =>
+    f.label.length <= PLACEHOLDER_LABEL_MAX && !f.label.includes('?')
+      ? T(`${f.label} निवडा`, `Select ${f.label}`)
+      : T('पर्याय निवडा', 'Select an option');
+  const select = (f: FieldDef, placeholder = pickOne(f)) => (
     <select {...common(f)} onChange={(e) => change(f.key, e.target.value)}>
       <option value="">{placeholder}</option>
       {choicesOf(f).map((o) => (
@@ -298,6 +309,10 @@ export function StepFields({
     if (has(f, 'aadhaar'))
       return input(f, 'text', { inputMode: 'numeric', maxLength: 14, placeholder: T('१२ अंकी आधार क्रमांक', '12-digit Aadhaar number'), ...extra });
     if (has(f, 'indian_mobile')) return input(f, 'tel', { maxLength: 15, ...extra });
+    /* A PAN (ABCDE1234F) and an IFSC code (SBIN0001234) are written in capitals: typed so, no longer than they are. */
+    if (has(f, 'pan')) return input(f, 'text', { maxLength: 10, autoCapitalize: 'characters', spellCheck: false, ...extra }, (v) => v.toUpperCase());
+    if (has(f, 'ifsc')) return input(f, 'text', { maxLength: 11, autoCapitalize: 'characters', spellCheck: false, ...extra }, (v) => v.toUpperCase());
+    if (has(f, 'uppercase')) return input(f, 'text', { maxLength: longest(f, OWN_TEXT_MAX), autoCapitalize: 'characters', ...extra });
     return input(f, 'text', { maxLength: longest(f, OWN_TEXT_MAX), ...(has(f, 'digits') ? { inputMode: 'numeric' } : {}), ...extra });
   };
 
@@ -362,7 +377,7 @@ export function StepFields({
         return field(f, has(f, 'indian_mobile') ? input(f, 'tel', { maxLength: 15, ...auto('tel') }) : textInput(f, auto('tel')));
       case 'alternate_mobile_number':
         return field(f, has(f, 'indian_mobile') ? input(f, 'tel', { maxLength: 15 }) : textInput(f), {
-          hint: optional(f, 'आपल्याशी संपर्कासाठी दुसरा क्रमांक.', 'A different number we can reach you on.'),
+          hint: optional(f, 'आपल्याशी संपर्कासाठी क्रमांक; तो मोबाईल क्रमांकासारखाच असू शकतो.', 'A number we can reach you on; it may be the same as your mobile number.'),
         });
       case 'alternate_email':
         return field(f, input(f, has(f, 'email') ? 'email' : 'text', { maxLength: longest(f, OWN_TEXT_MAX) }), {
@@ -468,7 +483,7 @@ export function StepFields({
   };
 
   return (
-    <div className="grid">
+    <div className="grid aligned">
       {groupsOf(step, model.step(step), T).map((g) => (
         <Fragment key={g.title}>
           {g.title ? <h3 className="wide form-section">{g.title}</h3> : null}
