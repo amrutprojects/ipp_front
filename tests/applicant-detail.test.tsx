@@ -269,7 +269,7 @@ describe('Tracking panel: one student', () => {
     /* The tab says what it waits for, then opens the document's short-lived link: the browser shows it as it arrives. */
     expect(tab.document.body.textContent).toBe('Opening document…');
     await waitFor(() => expect(calls.some((u) => u.endsWith(`/manage/applicants/${ID}/documents/PHOTO/link`))).toBe(true));
-    await waitFor(() => expect(tab.location.replace).toHaveBeenCalledWith(`${window.location.origin}/api/v1/edp/files/token-photo`));
+    await waitFor(() => expect(tab.location.replace).toHaveBeenCalledWith(`${window.location.origin}/document/token-photo`));
     expect(calls.some((u) => u.endsWith('/documents/PHOTO/file'))).toBe(false);
   });
 

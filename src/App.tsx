@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import ApplicationPage from './pages/ApplicationPage';
+import DocumentViewPage from './pages/DocumentViewPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import LoginPage from './pages/LoginPage';
 import ApplicantDetailPage from './pages/manage/ApplicantDetailPage';
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/document/:token" element={<DocumentViewPage />} />
           <Route
             path="/application"
             element={

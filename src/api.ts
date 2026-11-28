@@ -138,15 +138,16 @@ function openingTab(): Window | null {
 
 /*
  * An authenticated document (the student's own, or one of a student for the panel), opened in a new tab. `path` is its
- * …/documents/:docType/file address: the page asks for a short-lived link to it (…/link, with the session) and the tab goes
- * there, so the browser shows the document as it arrives instead of a blank tab until the page has fetched all of it.
+ * …/documents/:docType/file address: the page asks for a short-lived link to it (…/link, with the session) and the tab opens
+ * it on the portal's own address, /document/<link> (DocumentViewPage), which fetches it from the API and shows it.
  */
 export async function openFile(path: string, realm: Realm): Promise<void> {
   const tab = openingTab();
   try {
     const { data } = await api<{ url: string }>(path.replace(/\/file$/, '/link'), { realm });
-    /* The link is on the API (ippapi.… in production, another domain than this page), not on the portal. */
-    const url = new URL(data.url, new URL(BASE, window.location.origin)).href;
+    const token = /\/files\/([^/?#]+)$/.exec(data.url)?.[1];
+    /* Any other link is opened where it is: on the API (ippapi.… in production, another domain than this page). */
+    const url = token ? `${window.location.origin}/document/${token}` : new URL(data.url, new URL(BASE, window.location.origin)).href;
     if (tab) tab.location.replace(url);
     else window.open(url, '_blank', 'noopener');
   } catch (e) {
