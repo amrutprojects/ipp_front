@@ -1,4 +1,4 @@
-import type { ApplicationStage, FilterChoice, ListFilterOptions, Stage, Summary, VerifiedFilter } from '../../types';
+import { APPLICATION_STAGES, type ApplicationStage, type FilterChoice, type ListFilterOptions, type Stage, type Summary, type VerifiedFilter } from '../../types';
 
 /* What the list is filtered by; '' = all. The summary tiles also set `stage` (SUBMITTED = submitted, at any approval stage). */
 export interface ListFilters {
@@ -24,6 +24,30 @@ export const NO_FILTERS: ListFilters = {
   final: '',
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CHECKS: readonly string[] = ['VERIFIED', 'NOT_VERIFIED'];
+
+/*
+ * The filters a link opens the list with (the Dashboard's figures, Batches): ?application_stage= (or SUBMITTED, the
+ * Form submitted tile), ?district_id=, ?caste_id=, ?technology_id=, ?centre_id=, ?documents=, ?final=. A value the list
+ * does not offer is left out.
+ */
+export function filtersFromAddress(params: URLSearchParams): ListFilters {
+  const id = (key: string) => (UUID.test(params.get(key) ?? '') ? params.get(key)! : '');
+  const check = (key: string) => (CHECKS.includes(params.get(key) ?? '') ? (params.get(key) as VerifiedFilter) : '');
+  const stage = params.get('application_stage') ?? '';
+  return {
+    ...NO_FILTERS,
+    stage: stage === 'SUBMITTED' || (APPLICATION_STAGES as readonly string[]).includes(stage) ? (stage as ApplicationStage | Stage) : '',
+    district_id: id('district_id'),
+    caste_id: id('caste_id'),
+    technology_id: id('technology_id'),
+    centre_id: id('centre_id'),
+    documents: check('documents'),
+    final: check('final'),
+  };
+}
+
 const VERIFIED: { value: VerifiedFilter; label: string }[] = [
   { value: 'VERIFIED', label: 'Verified' },
   { value: 'NOT_VERIFIED', label: 'Not verified' },
@@ -31,7 +55,7 @@ const VERIFIED: { value: VerifiedFilter; label: string }[] = [
 const choices = (list: FilterChoice[] | undefined) => (list ?? []).map((c) => ({ value: c.id, label: c.name }));
 
 /* How many students are at a stage of application, where the summary says. */
-function countOf(code: string, summary: Summary | null): number | undefined {
+export function countOf(code: string, summary: Summary | null): number | undefined {
   const approvals = summary?.approvals as Record<string, number> | undefined;
   if (code === 'AUDITOR') return approvals?.AWAITING;
   return (summary?.counts as Record<string, number> | undefined)?.[code] ?? approvals?.[code];

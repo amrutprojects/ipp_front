@@ -4,8 +4,10 @@ import { api, type PageMeta } from '../../api';
 import { fmtDate, Notice } from '../../components/ui';
 import type { Batch, BatchPlace } from '../../types';
 import { batchDates, deliveryLabel } from './batchPlan';
+import { BatchRunCell } from './BatchRun';
 import BatchSync from './BatchSync';
 import { ManageShell } from './ManageLayout';
+import { useCanEdit } from '../../session';
 
 const LIMIT = 25;
 
@@ -30,6 +32,7 @@ export const batchPlaces = (b: Batch) =>
  * viewed, or its name, centre, dates, delivery mode and technology changed, here.
  */
 export default function BatchesPage() {
+  const canEdit = useCanEdit();
   const [rows, setRows] = useState<Batch[]>([]);
   const [meta, setMeta] = useState<(PageMeta & { size?: number }) | null>(null);
   const [search, setSearch] = useState('');
@@ -103,6 +106,7 @@ export default function BatchesPage() {
               <th>Centre</th>
               <th>Students</th>
               <th>Where it is now</th>
+              <th>Batch status</th>
               <th>Rejected</th>
               <th>Dates</th>
               <th>Delivery</th>
@@ -113,7 +117,7 @@ export default function BatchesPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="center muted" style={{ padding: 28 }}>
+                <td colSpan={12} className="center muted" style={{ padding: 28 }}>
                   {loading ? 'Loading…' : query ? 'No batches match.' : 'No batches yet.'}
                 </td>
               </tr>
@@ -134,6 +138,9 @@ export default function BatchesPage() {
                   <td>
                     {batchPlaces(b)}
                     <BatchSync batch={b} onRetried={() => void load()} />
+                  </td>
+                  <td>
+                    <BatchRunCell batch={b} canEdit={canEdit} onChanged={() => void load()} />
                   </td>
                   <td>{b.rejected ? <span className="badge do-REJECTED">{b.rejected}</span> : '—'}</td>
                   <td className="nowrap">{batchDates(b)}</td>

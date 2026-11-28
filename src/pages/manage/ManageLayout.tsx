@@ -32,7 +32,7 @@ export function ManageHeader() {
 }
 
 /*
- * Applicants (the student tracking list), Batches, Masters, for an admin Users, Settings and CMS (the public landing page);
+ * Dashboard (the Auditor's figures), Applicants (the student tracking list), Batches, Masters, for an admin Users, Settings and CMS (the public landing page);
  * Settings and CMS are read-only for a viewer.
  */
 export function ManageNav() {
@@ -41,6 +41,7 @@ export function ManageNav() {
   const inCentres = useLocation().pathname.startsWith('/manage/centres');
   return (
     <nav className="manage-nav" aria-label="Tracking panel sections">
+      <NavLink to="/manage/dashboard">Dashboard</NavLink>
       <NavLink to="/manage" end>
         Applicants
       </NavLink>

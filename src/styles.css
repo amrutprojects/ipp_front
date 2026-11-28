@@ -2420,3 +2420,162 @@ a.btn {
   color: var(--text);
   text-align: center;
 }
+
+/*
+ * Auditor dashboard (/manage/dashboard, pages/manage/DashboardPage.tsx): the stage tiles of Student tracking, then one
+ * card per filter (District, Category, Technology, Centre, Stage of application, Documents, Final verification), each
+ * value a link to those students with its share of all students. Sized so that a 1080p screen shows it all.
+ */
+.dash-page .dash-title {
+  margin: 0;
+}
+.dash-page .dash-sub {
+  margin: 0 0 10px;
+}
+.dash-stages {
+  /* The seven tiles share the whole row. */
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  margin-bottom: 12px;
+}
+.dash-link {
+  display: block;
+  text-decoration: none;
+}
+.dash-link:hover,
+.dash-link:focus-visible {
+  border-color: var(--brand-600);
+  background: var(--brand-050);
+}
+.dash-groups {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.dash-groups .card + .card {
+  margin-top: 0;
+}
+.dash-group {
+  padding: 12px 14px;
+}
+.dash-group.wide {
+  grid-column: span 2;
+}
+.dash-group h3 {
+  margin: 0 0 8px;
+  font-size: 15.5px;
+}
+.dash-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px 0 0;
+  max-height: 212px;
+  overflow-y: auto;
+}
+.dash-group.wide .dash-rows {
+  columns: 2;
+  column-gap: 18px;
+}
+.dash-rows li {
+  break-inside: avoid;
+}
+.dash-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+}
+a.dash-row:hover,
+a.dash-row:focus-visible {
+  background: var(--brand-050);
+}
+.dash-row.none {
+  color: var(--muted);
+}
+.dash-row-l {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-row-bar {
+  height: 8px;
+  border-radius: 0 4px 4px 0;
+  background: var(--brand-050);
+  overflow: hidden;
+}
+.dash-row-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--brand-600);
+}
+.dash-row b {
+  min-width: 24px;
+  text-align: right;
+  color: var(--maroon);
+  font-variant-numeric: tabular-nums;
+}
+.dash-empty {
+  margin: 0;
+  font-size: 13px;
+}
+@media (max-width: 1280px) {
+  .dash-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .dash-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dash-group.wide {
+    grid-column: auto;
+  }
+  .dash-group.wide .dash-rows {
+    columns: 1;
+  }
+}
+
+/* A batch's flag (Batches, a batch's page, its history): not started, ready to start, ongoing, ended. */
+.badge.run-NOT_STARTED {
+  background: #f2ede7;
+  color: var(--text-2);
+}
+.badge.run-READY {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.badge.run-ONGOING {
+  background: var(--info-bg);
+  color: var(--info);
+}
+.badge.run-ENDED {
+  background: var(--saffron-100);
+  color: var(--brand-700);
+}
+.run-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 170px;
+}
+.run-cell .btn {
+  margin-top: 4px;
+}
+.run-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 8px 0 12px;
+}
+.run-students {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}

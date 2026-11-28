@@ -86,9 +86,15 @@ export function PasswordInput(props: {
   autoComplete: string;
   'aria-describedby'?: string;
   'aria-required'?: boolean;
+  /*
+   * Typed by the user every time (a final confirmation): no browser or password manager fills it in. Read-only until the
+   * user clicks or tabs into it (browsers do not fill a read-only field), and marked as not a saved password.
+   */
+  noFill?: boolean;
 }) {
   const { T } = useLang();
   const [show, setShow] = useState(false);
+  const [armed, setArmed] = useState(!props.noFill);
   /* The label says what the button does next; no aria-pressed as well, which would contradict it. */
   const label = show ? T('पासवर्ड लपवा', 'Hide password') : T('पासवर्ड दाखवा', 'Show password');
   return (
@@ -102,7 +108,12 @@ export function PasswordInput(props: {
         aria-invalid={props.invalid || undefined}
         aria-describedby={props['aria-describedby']}
         aria-required={props['aria-required']}
-        autoComplete={props.autoComplete}
+        autoComplete={props.noFill ? 'new-password' : props.autoComplete}
+        name={props.noFill ? `${props.id}-confirm` : undefined}
+        readOnly={!armed}
+        onFocus={() => setArmed(true)}
+        data-lpignore={props.noFill ? 'true' : undefined}
+        data-1p-ignore={props.noFill ? 'true' : undefined}
         maxLength={72}
       />
       <button type="button" className="pw-toggle" onClick={() => setShow(!show)} aria-label={label} title={label}>

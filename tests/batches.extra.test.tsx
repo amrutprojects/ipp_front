@@ -431,21 +431,23 @@ describe('Batches: code, dates, delivery mode and technology', () => {
     mockApi({ batches: [BATCH, online, { ...OLD, id: 'b3', name: 'Old Batch' }] });
     renderAt('/manage/batches');
     const cells = (r: HTMLElement) => within(r).getAllByRole('cell').map((c) => c.textContent);
-    expect(cells(await screen.findByRole('row', { name: /Pune Batch 1/ })).slice(1, 9)).toEqual([
+    expect(cells(await screen.findByRole('row', { name: /Pune Batch 1/ })).slice(1, 10)).toEqual([
       'Pune Batch 1IPP-B-0007',
       'Pune',
       'Pune CentrePUN',
       '30',
       'Divisional Officer 30',
+      /* Batch status: absent from this (older) answer. */
+      '—',
       '—',
       '01/12/2026 – 01/03/2027',
       'Blended',
     ]);
-    expect(cells(row(/Pune Batch 2/)).slice(7, 9)).toEqual(['From 01/12/2026', 'Online']);
+    expect(cells(row(/Pune Batch 2/)).slice(8, 10)).toEqual(['From 01/12/2026', 'Online']);
     /* An older API leaves them out. */
     const old = cells(row(/Old Batch/));
     expect(old[1]).toBe('Old Batch');
-    expect(old.slice(7, 9)).toEqual(['—', '—']);
+    expect(old.slice(8, 10)).toEqual(['—', '—']);
   });
 
   it('shows them on the batch page, with the technology each student chose', async () => {

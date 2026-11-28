@@ -507,6 +507,27 @@ export interface Batch {
   created_by: string | null;
   updated_at: string;
   updated_by: string | null;
+  /*
+   * Where the batch is: NOT_STARTED (ready = every student final approved, so it may start), ONGOING or ENDED, when and by
+   * whom. Absent from an older API.
+   */
+  run?: BatchRun;
+}
+export type BatchRunStatus = 'NOT_STARTED' | 'ONGOING' | 'ENDED';
+export interface BatchRun {
+  status: BatchRunStatus;
+  ready: boolean;
+  started_at: string | null;
+  started_by: string | null;
+  ended_at: string | null;
+  ended_by: string | null;
+}
+/* One start or end of a batch: the date and time given, who gave it, when it was recorded. */
+export interface BatchRunEntry {
+  action: 'START' | 'END';
+  at: string;
+  by: string;
+  recorded_at: string;
 }
 export interface BatchMember {
   id: string;
@@ -527,6 +548,8 @@ export interface BatchMember {
 }
 export interface BatchDetail extends Batch {
   members: BatchMember[];
+  /* Every start and end, oldest first (absent from an older API). */
+  runs?: BatchRunEntry[];
 }
 /* A district with a batch size of its own. */
 export interface DistrictBatchSize {

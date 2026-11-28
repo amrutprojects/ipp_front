@@ -9,6 +9,7 @@ import ApprovalStageCell from './ApprovalStageCell';
 import { batchPlaces } from './BatchesPage';
 import { batchDates, deliveryLabel, NO_PLAN, otherCentreText, planChanges, planOf, technologyLabel } from './batchPlan';
 import BatchPlanFields, { checkPlan, useTechnologies } from './BatchPlanFields';
+import { BatchRunCell, BatchRunHistory } from './BatchRun';
 import BatchSync from './BatchSync';
 import { BATCH_FIELDS, useActiveCentres } from './CreateBatchDialog';
 import { ManageShell } from './ManageLayout';
@@ -165,6 +166,18 @@ export default function BatchDetailPage() {
         {otherCentre ? ` · ${otherCentre}` : ''}
       </p>
       <BatchSync batch={batch} onRetried={() => void load()} />
+      <div className="run-block">
+        <b>Batch status</b>
+        <BatchRunCell
+          batch={batch}
+          canEdit={canEdit}
+          onChanged={(b) => {
+            show(b);
+            setError('');
+            setDone(b.run?.status === 'ENDED' ? 'The batch was ended.' : 'The batch was started.');
+          }}
+        />
+      </div>
       {done ? <Notice tone="ok">{done}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 
@@ -286,6 +299,7 @@ export default function BatchDetailPage() {
         approved again in <Link to="/manage?application_stage=RETURNED">Applicants (sent back)</Link> and goes straight back to the Divisional
         Officer in this batch.
       </p>
+      <BatchRunHistory runs={batch.runs} />
     </ManageShell>
   );
 }

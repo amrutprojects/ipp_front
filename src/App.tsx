@@ -11,6 +11,7 @@ import CentreDetailPage from './pages/manage/CentreDetailPage';
 import CentreFormPage from './pages/manage/CentreFormPage';
 import CentresPage from './pages/manage/CentresPage';
 import CmsPage from './pages/manage/cms/CmsPage';
+import DashboardPage from './pages/manage/DashboardPage';
 import EditFormPage from './pages/manage/EditFormPage';
 import ManagePage from './pages/manage/ManagePage';
 import DistrictsPage from './pages/manage/masters/DistrictsPage';
@@ -51,6 +52,14 @@ export default function App() {
             }
           />
           <Route path="/manage/login" element={<ManageLoginPage />} />
+          <Route
+            path="/manage/dashboard"
+            element={
+              <RequireManage>
+                <DashboardPage />
+              </RequireManage>
+            }
+          />
           <Route
             path="/manage"
             element={

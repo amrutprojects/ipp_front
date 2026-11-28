@@ -492,18 +492,21 @@ describe('Batches (tracking panel)', () => {
       'Centre',
       'Students',
       'Where it is now',
+      'Batch status',
       'Rejected',
       'Dates',
       'Delivery',
       'Created',
       'Actions',
     ]);
-    expect(within(pune).getAllByRole('cell').slice(1, 7).map((c) => c.textContent)).toEqual([
+    expect(within(pune).getAllByRole('cell').slice(1, 8).map((c) => c.textContent)).toEqual([
       'Pune Batch 1',
       'Pune',
       'Pune CentrePUN',
       '30',
       'Divisional Officer 2 · COEP 27 · Sent back 1',
+      /* Batch status: absent from this (older) answer. */
+      '—',
       '2',
     ]);
     expect(within(pune).getByRole('link', { name: 'View Pune Batch 1' })).toHaveAttribute('href', '/manage/batches/b1');

@@ -3,10 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, type PageMeta } from '../../api';
 import { fmtDate, Footer, Notice } from '../../components/ui';
 import {
-  APPLICATION_STAGES,
   FOLLOW_UP_STATUS,
   type Applicant,
-  type ApplicationStage,
   type FollowUpStatus,
   type ListFilterOptions,
   type Summary,
@@ -20,7 +18,7 @@ import FollowUpDialog from './FollowUpDialog';
 import { ManageHeader, ManageNav } from './ManageLayout';
 import TrashSection from './TrashSection';
 import DeleteRecordDialog from './DeleteRecordDialog';
-import StudentFilters, { NO_FILTERS, type ListFilters } from './StudentFilters';
+import StudentFilters, { filtersFromAddress, NO_FILTERS, type ListFilters } from './StudentFilters';
 
 const LIMIT = 25;
 /* What is typed into the search and the text filters, as applied (once typing stops). */
@@ -45,12 +43,9 @@ export default function ManagePage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<Applicant[]>([]);
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  /* ?application_stage=BATCH (from Batches) opens the list on that stage. */
+  /* ?application_stage=BATCH (from Batches), ?district_id=… (from the Dashboard): the list opens with those filters. */
   const [params] = useSearchParams();
-  const [filters, setFilters] = useState<ListFilters>(() => {
-    const v = params.get('application_stage') as ApplicationStage | null;
-    return v && APPLICATION_STAGES.includes(v) ? { ...NO_FILTERS, stage: v } : NO_FILTERS;
-  });
+  const [filters, setFilters] = useState<ListFilters>(() => filtersFromAddress(params));
   /* The choices of the filters; null = not loaded. */
   const [options, setOptions] = useState<ListFilterOptions | null>(null);
   const [optionsFailed, setOptionsFailed] = useState(false);

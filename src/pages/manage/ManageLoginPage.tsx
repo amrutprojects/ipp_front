@@ -23,7 +23,8 @@ export default function ManageLoginPage() {
   const [failure, setFailure] = useState<Failure | 'missing' | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to="/manage" replace />;
+  /* A signed-in user starts on the dashboard. */
+  if (user) return <Navigate to="/manage/dashboard" replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -33,7 +34,7 @@ export default function ManageLoginPage() {
     try {
       const { data } = await api<ManageSession>('/manage/auth/login', { method: 'POST', body: { email, password } });
       signIn(data.token, data.admin);
-      navigate('/manage', { replace: true });
+      navigate('/manage/dashboard', { replace: true });
     } catch (err) {
       setFailure(toFailure(err, 'LOGIN_FAILED'));
     } finally {
