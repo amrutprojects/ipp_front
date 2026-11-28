@@ -145,7 +145,8 @@ export async function openFile(path: string, realm: Realm): Promise<void> {
   const tab = openingTab();
   try {
     const { data } = await api<{ url: string }>(path.replace(/\/file$/, '/link'), { realm });
-    const url = new URL(data.url, window.location.origin).href;
+    /* The link is on the API (ippapi.… in production, another domain than this page), not on the portal. */
+    const url = new URL(data.url, new URL(BASE, window.location.origin)).href;
     if (tab) tab.location.replace(url);
     else window.open(url, '_blank', 'noopener');
   } catch (e) {
