@@ -5,6 +5,7 @@ export interface ListFilters {
   name: string;
   district_id: string;
   caste_id: string;
+  technology_id: string;
   stage: ApplicationStage | Stage | '';
   documents: VerifiedFilter | '';
   mobile: string;
@@ -15,6 +16,7 @@ export const NO_FILTERS: ListFilters = {
   name: '',
   district_id: '',
   caste_id: '',
+  technology_id: '',
   stage: '',
   documents: '',
   mobile: '',
@@ -64,8 +66,8 @@ function Choice({
 }
 
 /*
- * The list's filters, in the order every student list of the program has them. District, category, stage and centre are
- * chosen from GET /manage/filters; name and mobile match a part (the page applies them once typing stops).
+ * The list's filters, in the order every student list of the program has them. District, category, technology, centre and
+ * stage are chosen from GET /manage/filters; name and mobile match a part (the page applies them once typing stops).
  */
 export default function StudentFilters({
   value,
@@ -117,6 +119,20 @@ export default function StudentFilters({
           onChange={(v) => onChange({ caste_id: v })}
         />
         <Choice
+          label="Technology"
+          all="All technologies"
+          value={value.technology_id}
+          options={choices(options?.technologies)}
+          onChange={(v) => onChange({ technology_id: v })}
+        />
+        <Choice
+          label="Centre"
+          all="All centres"
+          value={value.centre_id}
+          options={choices(options?.centres)}
+          onChange={(v) => onChange({ centre_id: v })}
+        />
+        <Choice
           label="Stage of application"
           all="All stages"
           value={value.stage}
@@ -145,15 +161,6 @@ export default function StudentFilters({
             onChange={(e) => onChange({ mobile: e.target.value.replace(/\D/g, '').slice(-10) })}
           />
         </label>
-        {/* The Centre filter is not offered for now (26 Nov 2026): a centre_id in the address is still applied.
-        <Choice
-          label="Centre"
-          all="All centres"
-          value={value.centre_id}
-          options={choices(options?.centres)}
-          onChange={(v) => onChange({ centre_id: v })}
-        />
-        */}
         <Choice
           label="Final verification"
           all="All"

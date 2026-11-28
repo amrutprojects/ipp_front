@@ -10,6 +10,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const DISTRICT = 'd1111111-1111-4111-8111-111111111111';
 const CASTE = 'c1111111-1111-4111-8111-111111111111';
 const CENTRE = 'e1111111-1111-4111-8111-111111111111';
+const TECHNOLOGY = 'f1111111-1111-4111-8111-111111111111';
 
 /* GET /manage/filters. */
 const OPTIONS: ListFilterOptions = {
@@ -18,6 +19,10 @@ const OPTIONS: ListFilterOptions = {
     { id: 'd2222222-2222-4222-8222-222222222222', name: 'Satara' },
   ],
   categories: [{ id: CASTE, name: 'Maratha' }],
+  technologies: [
+    { id: TECHNOLOGY, name: 'Full Stack Python' },
+    { id: 'f2222222-2222-4222-8222-222222222222', name: 'Cyber Security' },
+  ],
   centres: [{ id: CENTRE, name: 'Pune Centre' }],
   stages: [
     { code: 'OTP_PENDING', label: 'OTP pending' },
@@ -102,14 +107,16 @@ describe('Tracking panel filters', () => {
       'Name',
       'District',
       'Category',
+      'Technology',
+      'Centre',
       'Stage of application',
       'Documents',
       'Mobile no.',
       'Final verification',
       'Clear filters',
     ]);
-    /* The Centre filter is not offered for now. */
-    expect(bar.queryByLabelText('Centre')).not.toBeInTheDocument();
+    expect(texts(bar.getByLabelText('Technology'))).toEqual(['All technologies', 'Full Stack Python', 'Cyber Security']);
+    expect(texts(bar.getByLabelText('Centre'))).toEqual(['All centres', 'Pune Centre']);
     expect(texts(bar.getByLabelText('District'))).toEqual(['All districts', 'Pune', 'Satara']);
     expect(texts(bar.getByLabelText('Category'))).toEqual(['All categories', 'Maratha']);
     expect(texts(bar.getByLabelText('Documents'))).toEqual(['All', 'Verified', 'Not verified']);
@@ -143,6 +150,8 @@ describe('Tracking panel filters', () => {
     expect(sent(lists)).toEqual({});
     await userEvent.selectOptions(bar.getByLabelText('District'), 'Pune');
     await userEvent.selectOptions(bar.getByLabelText('Category'), 'Maratha');
+    await userEvent.selectOptions(bar.getByLabelText('Technology'), 'Full Stack Python');
+    await userEvent.selectOptions(bar.getByLabelText('Centre'), 'Pune Centre');
     await userEvent.selectOptions(bar.getByLabelText('Stage of application'), 'ADMIN');
     await userEvent.selectOptions(bar.getByLabelText('Documents'), 'Verified');
     await userEvent.selectOptions(bar.getByLabelText('Final verification'), 'Not verified');
@@ -156,6 +165,8 @@ describe('Tracking panel filters', () => {
           name: 'Asha',
           district_id: DISTRICT,
           caste_id: CASTE,
+          technology_id: TECHNOLOGY,
+          centre_id: CENTRE,
           application_stage: 'ADMIN',
           documents: 'VERIFIED',
           mobile: '90000',
@@ -270,6 +281,8 @@ describe('Tracking panel filters', () => {
     renderPage();
     const bar = await filterBar();
     await userEvent.selectOptions(bar.getByLabelText('District'), 'Satara');
+    await userEvent.selectOptions(bar.getByLabelText('Technology'), 'Cyber Security');
+    await userEvent.selectOptions(bar.getByLabelText('Centre'), 'Pune Centre');
     await userEvent.selectOptions(bar.getByLabelText('Final verification'), 'Verified');
     await userEvent.click(screen.getByRole('button', { name: /Step 2 filled/ }));
     await userEvent.type(bar.getByLabelText('Name'), 'Asha');
@@ -282,7 +295,7 @@ describe('Tracking panel filters', () => {
     await userEvent.click(bar.getByRole('button', { name: 'Clear filters' }));
     await waitFor(() => expect(sent(lists)).toEqual({}));
     expect(lists[lists.length - 1]!.get('page')).toBe('1');
-    for (const label of ['Name', 'District', 'Category', 'Stage of application', 'Documents', 'Mobile no.', 'Final verification'])
+    for (const label of ['Name', 'District', 'Category', 'Technology', 'Centre', 'Stage of application', 'Documents', 'Mobile no.', 'Final verification'])
       expect(bar.getByLabelText(label)).toHaveValue('');
     expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
     expect(screen.getByRole('combobox', { name: 'Filter by follow-up' })).toHaveValue('');

@@ -74,7 +74,7 @@ export default function ManagePage() {
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const { stage, district_id, caste_id, documents, centre_id, final } = filters;
+  const { stage, district_id, caste_id, technology_id, documents, centre_id, final } = filters;
 
   /* Only the newest request's answer is shown (a quicker filter change can overtake an older request). */
   const latest = useRef(0);
@@ -96,6 +96,7 @@ export default function ManagePage() {
             name: text.name || undefined,
             district_id: district_id || undefined,
             caste_id: caste_id || undefined,
+            technology_id: technology_id || undefined,
             documents: documents || undefined,
             mobile: text.mobile || undefined,
             centre_id: centre_id || undefined,
@@ -123,7 +124,7 @@ export default function ManagePage() {
     } finally {
       if (id === latest.current) setLoading(false);
     }
-  }, [page, stage, district_id, caste_id, documents, centre_id, final, followUp, text]);
+  }, [page, stage, district_id, caste_id, technology_id, documents, centre_id, final, followUp, text]);
   /* A row has one checkbox: for a form the Auditor can approve, or for one that waits for a batch. */
   const approvable = rows.filter((r) => r.can_approve);
   const selectedRows = approvable.filter((r) => selected.has(r.id));
@@ -440,6 +441,8 @@ export default function ManagePage() {
                         <dd>{r.district ?? '—'}</dd>
                         <dt>Category</dt>
                         <dd>{r.category ?? '—'}</dd>
+                        <dt>Technology</dt>
+                        <dd>{r.technology ?? '—'}</dd>
                         <dt>Centre</dt>
                         <dd>{r.centre ?? '—'}</dd>
                         <dt>Documents</dt>

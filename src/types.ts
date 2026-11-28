@@ -363,6 +363,8 @@ export interface Applicant {
   district_id: string | null;
   district: string | null;
   category: string | null;
+  /* The technology chosen in the form. Absent from an older API. */
+  technology?: string | null;
   centre: string | null;
   /* Absent from an older API. */
   centre_id?: string | null;
@@ -427,6 +429,8 @@ export interface FilterChoice {
 export interface ListFilterOptions {
   districts: FilterChoice[];
   categories: FilterChoice[];
+  /* Absent from an older API. */
+  technologies?: FilterChoice[];
   centres: FilterChoice[];
   stages: { code: ApplicationStage; label: string }[];
 }
